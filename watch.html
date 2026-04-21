@@ -1975,17 +1975,85 @@ function esc(s) { if(!s)return''; return String(s).replace(/&/g,'&amp;').replace
 function formatDur(s) { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; }
 function formatTime(s) { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=Math.floor(s%60); if(h>0)return`${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; return`${m}:${String(sec).padStart(2,'0')}`; }
 
-// ── URL param resolution — supports both new slug URLs and legacy ?id= URLs ──
-const _params  = new URLSearchParams(location.search);
-const filmSlug = _params.get('slug');   // new: /movie/close-range  → ?slug=close-range
-const filmId   = _params.get('id');     // legacy: ?id=<uuid>  (kept for backwards compat)
-console.log('[MOVXIO] watch.html | URL:', location.href, '| slug:', filmSlug, '| filmId:', filmId);
+// ── Resolve film identifier from URL ──────────────────────────
+// Supports /film/:slug (new) and /watch.html?id=UUID (legacy)
+function getFilmIdentifier() {
+  const slugMatch = location.pathname.match(/^\/film\/([a-z0-9][a-z0-9-]*)\/?$/);
+  if (slugMatch) return { type: 'slug', value: slugMatch[1] };
+  const id = new URLSearchParams(location.search).get('id');
+  if (id) return { type: 'id', value: id };
+  return null;
+}
+const filmIdentifier = getFilmIdentifier();
+// Keep filmId for any legacy references still in the page
+const filmId = filmIdentifier ? filmIdentifier.value : null;
+console.log('[MOVXIO] watch.html | URL:', location.href, '| identifier:', filmIdentifier);
+
 let player = null;
 let currentFilm = null;
 let controlsTimer = null;
 let isDragging = false;
 
+// ── Update page meta tags (title, OG, canonical) ──────────────
+function updatePageMeta(film) {
+  if (!film) return;
+  const title    = film.title || 'Watch Free';
+  const year     = film.year  ? ` (${film.year})` : '';
+  const desc     = film.description
+    ? film.description.slice(0, 160)
+    : `Watch ${title} free on MOVXIO — no account needed.`;
+  const image    = film.thumbnail_url || '';
+  const canonical = film.slug
+    ? `https://movxio.com/film/${film.slug}`
+    : location.href;
+  document.title = `${title}${year} — Watch Online Free | MOVXIO`;
+  const canonEl = document.getElementById('canonicalTag');
+  if (canonEl) canonEl.setAttribute('href', canonical);
+  const setMeta = (sel, attr, val) => { const el = document.querySelector(sel); if (el) el.setAttribute(attr, val); };
+  setMeta('meta[property="og:title"]',        'content', `${title}${year} — MOVXIO`);
+  setMeta('meta[property="og:description"]',  'content', desc);
+  setMeta('meta[property="og:image"]',        'content', image);
+  setMeta('meta[property="og:url"]',          'content', canonical);
+  setMeta('meta[property="og:type"]',         'content', 'video.movie');
+  setMeta('meta[name="twitter:title"]',       'content', title + year);
+  setMeta('meta[name="twitter:description"]', 'content', desc);
+  setMeta('meta[name="twitter:image"]',       'content', image);
+  setMeta('meta[name="description"]',         'content', desc);
+  const bcCurrent = document.querySelector('.bc-current');
+  if (bcCurrent) bcCurrent.textContent = title;
+}
+
+// ── Client-side URL canonicalization ──────────────────────────
+// If the worker didn't redirect (cached/bypassed), fix it here.
+function maybeRedirectToSlug(film) {
+  // Intentionally empty — 301 redirect is handled server-side by _worker.js.
+  // Using history.replaceState() here breaks the browser back button.
+}
+
+// ── Film card URL helper ───────────────────────────────────────
+function filmUrl(f) {
+  return f && f.slug ? `/film/${f.slug}` : `/watch.html?id=${f.id}`;
+}
+
 // ── Fetch ─────────────────────────────────────────────────────
+// Fetch a single film by slug or id (fast — indexed, 1 row)
+async function fetchSingleFilm(identifier) {
+  if (!identifier || !CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_KEY) return null;
+  const param = identifier.type === 'slug'
+    ? `slug=eq.${encodeURIComponent(identifier.value)}`
+    : `id=eq.${encodeURIComponent(identifier.value)}`;
+  try {
+    const res = await fetch(
+      `${CONFIG.SUPABASE_URL}/rest/v1/films?${param}&select=*&limit=1`,
+      { headers: { 'apikey': CONFIG.SUPABASE_KEY, 'Authorization': `Bearer ${CONFIG.SUPABASE_KEY}` } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data && data.length ? data[0] : null;
+  } catch { return null; }
+}
+
+// Fetch all films (for related sidebar)
 async function fetchFilms() {
   if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_KEY) return DEMO;
   try {
@@ -1994,20 +2062,6 @@ async function fetchFilms() {
     });
     return res.ok ? await res.json() : DEMO;
   } catch { return DEMO; }
-}
-
-// Fetch a single film by slug — much faster than loading all films
-async function fetchFilmBySlug(slug) {
-  if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_KEY) return null;
-  try {
-    const res = await fetch(
-      `${CONFIG.SUPABASE_URL}/rest/v1/films?slug=eq.${encodeURIComponent(slug)}&select=*&limit=1`,
-      { headers: { 'apikey': CONFIG.SUPABASE_KEY, 'Authorization': `Bearer ${CONFIG.SUPABASE_KEY}` } }
-    );
-    if (!res.ok) return null;
-    const rows = await res.json();
-    return rows.length ? rows[0] : null;
-  } catch { return null; }
 }
 
 async function getSignedUrl(slug) {
@@ -2801,7 +2855,7 @@ function renderInfo(film) {
   const _metaDesc = document.querySelector('meta[name="description"]');
   if (_metaDesc) _metaDesc.setAttribute('content', `Watch ${film.title} free on MOVXIO. No account needed.`);
   const _canonical = document.querySelector('link[rel="canonical"]');
-  if (_canonical) _canonical.setAttribute('href', film.slug ? `https://movxio.com/movie/${film.slug}` : `https://movxio.com/watch.html?id=${encodeURIComponent(film.id)}`);
+  if (_canonical) _canonical.setAttribute('href', film.slug ? `https://movxio.com/film/${film.slug}` : `https://movxio.com/watch.html?id=${encodeURIComponent(film.id)}`);
   const _ogUrl    = document.querySelector('meta[property="og:url"]');
   if (_ogUrl) _ogUrl.setAttribute('content', location.href);
   const _ogTitle  = document.querySelector('meta[property="og:title"]');
@@ -3049,7 +3103,7 @@ function renderRelated(films, currentId, currentGenres, currentFilm) {
   }
 
   document.getElementById('relatedList').innerHTML = sidebarFilms.map(f => `
-    <a class="related-card" href="${f.slug ? '/movie/'+f.slug : 'watch.html?id='+esc(f.id)}">
+    <a class="related-card" href="${f.slug ? `/film/${esc(f.slug)}` : `watch.html?id=${esc(f.id)}`}">
       ${f.thumbnail_url
         ? `<img class="related-thumb" src="${esc(f.thumbnail_url)}" alt="${esc(f.title)}" loading="lazy">`
         : `<div class="related-thumb-ph">🎬</div>`}
@@ -3072,7 +3126,7 @@ function renderRelated(films, currentId, currentGenres, currentFilm) {
       const imdb  = f.imdb_rating ? `★ ${f.imdb_rating}` : '';
       const year  = f.year ? String(f.year) : '';
       const meta  = [year, imdb].filter(Boolean).join(' · ');
-      return `<div class="film-card" onclick="window.location.href='${f.slug ? '/movie/'+f.slug : 'watch.html?id='+esc(f.id)}'">
+      return `<div class="film-card" onclick="window.location.href='${filmUrl(f)}'">
         <div class="card-thumb">${thumb}
           <div class="card-overlay">
             <div class="card-play"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6V2z"/></svg></div>
@@ -3763,32 +3817,21 @@ async function init() {
       showKeyHint('⚠ Slow connection detected');
     }, 4000);
 
-    let film = null;
+    // Fetch target film (by slug or id) + all films for sidebar — in parallel
+    const [targetFilm, films] = await Promise.all([
+      fetchSingleFilm(filmIdentifier),
+      fetchFilms(),
+    ]);
+    clearTimeout(slowTimer);
+    console.log('[MOVXIO] Films loaded:', films.length, '| identifier:', filmIdentifier);
 
-    if (filmSlug) {
-      // ── NEW: slug-based lookup — single fast query ──
-      film = await fetchFilmBySlug(filmSlug);
-      clearTimeout(slowTimer);
-      console.log('[MOVXIO] Slug lookup:', filmSlug, '→', film ? film.title : 'NOT FOUND');
+    const film = targetFilm || films[0];
 
-      // Rewrite canonical URL so it always shows the pretty slug URL
-      if (film) {
-        history.replaceState(null, '', `/movie/${film.slug}`);
-      }
-    } else {
-      // ── LEGACY: id-based lookup — loads all films then finds by id ──
-      const films = await fetchFilms();
-      clearTimeout(slowTimer);
-      console.log('[MOVXIO] Films loaded:', films.length, '| filmId:', filmId);
-      film = filmId
-        ? (films.find(f => String(f.id) === String(filmId)) || films[0])
-        : films[0];
+    // Redirect /watch.html?id=UUID → /film/:slug (client-side fallback)
+    maybeRedirectToSlug(film);
 
-      // If the found film has a slug, silently upgrade the URL
-      if (film && film.slug) {
-        history.replaceState(null, '', `/movie/${film.slug}`);
-      }
-    }
+    // Update page title, OG tags, canonical for regular users
+    updatePageMeta(film);
 
     if (!film) {
       document.getElementById('playerLoading').style.display = 'none';
@@ -3804,24 +3847,13 @@ async function init() {
       return;
     }
 
-    // For related films (needed by renderRelated), fetch all films in background
-    // We don't await this — renderRelated is called async below
-    let allFilmsPromise = null;
-    if (filmSlug) {
-      allFilmsPromise = fetchFilms();
-    }
-
     console.log('[MOVXIO] Rendering:', film.title, '| hls_url:', film.hls_url || 'none');
 
     trackHistory(film.id);
     renderInfo(film);
 
     const genres = (film.genre||'').split(',').map(g => { const t = g.trim(); return t.charAt(0).toUpperCase() + t.slice(1); }).filter(Boolean);
-
-    // Resolve all-films for related panel (already resolved if legacy path)
-    const allFilms = allFilmsPromise ? await allFilmsPromise : null;
-    renderRelated(allFilms || [film], film.id, genres, film);
-
+    renderRelated(films, film.id, genres, film);
     loadReactions(film.id);
     loadReviewsForFilm(film.id);
 
