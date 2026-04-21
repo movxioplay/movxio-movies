@@ -1,0 +1,3 @@
+# MOVXIO — Cloudflare Pages redirect rules
+# Pretty movie URLs: /movie/close-range  →  /watch.html?slug=close-range
+/movie/*  /watch.html?slug=:splat  200
