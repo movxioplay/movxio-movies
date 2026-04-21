@@ -757,13 +757,13 @@ nav {
   letter-spacing: 0.15em; color: var(--text-muted); flex-shrink: 0;
 }
 .more-header::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-/* 6-column compact grid — poster cards, no meta bar below */
+/* 7-column grid — Related Films, matches browse page style */
 .film-grid {
   display: grid; gap: 10px;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(7, 1fr);
 }
-@media (max-width: 1100px) { .film-grid { grid-template-columns: repeat(6, 1fr); gap: 8px; } }
-@media (max-width: 700px)  { .film-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; } }
+@media (max-width: 1200px) { .film-grid { grid-template-columns: repeat(7, 1fr); gap: 8px; } }
+@media (max-width: 900px)  { .film-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; } }
 @media (max-width: 480px)  { .film-grid { grid-template-columns: repeat(3, 1fr); gap: 7px; } }
 .film-card { position: relative; border-radius: 6px; overflow: hidden; cursor: pointer; transition: transform 0.22s ease; background: var(--surface); display: flex; flex-direction: column; }
 .film-card:hover { transform: translateY(-3px) scale(1.02); }
@@ -793,8 +793,34 @@ nav {
 .card-play svg { width: 10px; height: 10px; fill: #fff; margin-left: 2px; }
 .card-overlay-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 10px; line-height: 1.2; color: var(--text); }
 .card-overlay-meta { font-family: 'Space Mono', monospace; font-size: 9px; color: rgba(255,255,255,0.45); }
-/* Compact: no meta bar below poster */
-.card-meta-bar { display: none; }
+/* Browse-style meta bar below poster — shown in Related Films */
+.card-meta-bar {
+  display: block;
+  padding: 6px 6px 5px;
+  background: var(--surface);
+}
+.card-meta-year {
+  font-family: 'Space Mono', monospace; font-size: 9px;
+  color: var(--text-muted); display: inline;
+}
+.card-meta-imdb {
+  font-family: 'Space Mono', monospace; font-size: 9px;
+  color: var(--gold); display: inline; margin-left: 4px;
+}
+.card-meta-title {
+  font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 700;
+  color: var(--text); margin-bottom: 3px; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.card-meta-tags {
+  display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;
+}
+.card-meta-tag {
+  font-family: 'Space Mono', monospace; font-size: 8px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  background: var(--surface2); border: 1px solid rgba(255,255,255,0.07);
+  color: var(--text-muted); padding: 1px 5px; border-radius: 3px;
+}
 
 /* ── SKELETON LOADERS ── */
 @keyframes shimmer {
@@ -3092,8 +3118,8 @@ function renderRelated(films, currentId, currentGenres, currentFilm) {
       </div>
     </a>`).join('');
 
-  // ── More to Watch — top 12 by score (no minimum, fills the grid) ──
-  const moreFilms = scored.slice(0, 12).map(x => x.f);
+  // ── Related Films — 14 films for 7×2 grid ────────────────────
+  const moreFilms = scored.slice(0, 14).map(x => x.f);
   if (moreFilms.length) {
     document.getElementById('moreSection').style.display = 'block';
     document.getElementById('moreGrid').innerHTML = moreFilms.map((f, i) => {
@@ -3103,14 +3129,23 @@ function renderRelated(films, currentId, currentGenres, currentFilm) {
         : `<div class="card-thumb-placeholder ${ph}"><span class="placeholder-icon">🎬</span></div>`;
       const imdb  = f.imdb_rating ? `★ ${f.imdb_rating}` : '';
       const year  = f.year ? String(f.year) : '';
-      const meta  = [year, imdb].filter(Boolean).join(' · ');
+      // Genre tags — up to 2
+      const tags  = (f.genre || '').split(',').slice(0, 2).map(g => {
+        const t = g.trim(); return t ? `<span class="card-meta-tag">${esc(t.toUpperCase())}</span>` : '';
+      }).join('');
       return `<div class="film-card" onclick="window.location.href='${filmUrl(f)}'">
         <div class="card-thumb">${thumb}
           <div class="card-overlay">
             <div class="card-play"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6V2z"/></svg></div>
-            <div class="card-overlay-title">${esc(f.title)}</div>
-            ${meta ? `<div class="card-overlay-meta">${esc(meta)}</div>` : ''}
           </div>
+        </div>
+        <div class="card-meta-bar">
+          <div class="card-meta-title">${esc(f.title)}</div>
+          <div>
+            ${year ? `<span class="card-meta-year">${esc(year)}</span>` : ''}
+            ${imdb ? `<span class="card-meta-imdb">${esc(imdb)}</span>` : ''}
+          </div>
+          ${tags ? `<div class="card-meta-tags">${tags}</div>` : ''}
         </div>
       </div>`;
     }).join('');
