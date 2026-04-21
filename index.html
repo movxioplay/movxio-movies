@@ -1965,7 +1965,7 @@ function filmCard(film, idx = 0) {
 
   const saved = isInWatchlist(film.id);
   return `
-  <div class="film-card" onclick="window.location.href='${film.slug ? '/' + esc(film.slug) : 'watch.html?id=' + esc(film.id)}'">
+  <div class="film-card" onclick="window.location.href='${film.slug ? '/movie/'+film.slug : 'watch.html?id='+esc(film.id)}'">
     ${film.badge ? `<div class="card-badge">${esc(film.badge)}</div>` : film.featured ? `<div class="card-badge">Featured</div>` : ''}
     <div class="card-thumb">
       ${thumb}
@@ -2294,7 +2294,7 @@ async function init() {
         content_rating: linked.content_rating || null,
         duration_secs: linked.duration_secs || null,
         featured: true,
-        _watchLink: b.cta_url || (b.film_id ? (linked && linked.slug ? `/${linked.slug}` : `watch.html?id=${b.film_id}`) : '#'),
+        _watchLink: b.cta_url || (b.film_id ? (linked && linked.slug ? `/movie/${linked.slug}` : `watch.html?id=${b.film_id}`) : '#'),
       };
     });
     buildCarousel(bannerHeroFilms);
@@ -2323,7 +2323,7 @@ async function init() {
     const items = allFilms.slice(0, 20).map((f, i) => ({
       '@type': 'ListItem',
       'position': i + 1,
-      'url': `https://movxio.com/${f.slug || 'watch.html?id=' + encodeURIComponent(f.id)}`,
+      'url': f.slug ? `https://movxio.com/movie/${encodeURIComponent(f.slug)}` : `https://movxio.com/watch.html?id=${encodeURIComponent(f.id)}`,
       'name': f.title
     }));
     const ld = {
@@ -2355,7 +2355,7 @@ function renderHero(film) {
   document.getElementById('heroLang').textContent = film.language || 'English';
   document.getElementById('heroGenreTag').textContent = (film.genre||'').split(',').slice(0,2).map(g=>g.trim()).join(' · ');
   document.getElementById('heroDesc').textContent = film.description ? film.description.slice(0, 200) : '';
-  document.getElementById('heroWatchBtn').href = film._watchLink || (film.slug ? `/${film.slug}` : `watch.html?id=${film.id}`);
+  document.getElementById('heroWatchBtn').href = film._watchLink || (film.slug ? `/movie/${film.slug}` : `watch.html?id=${film.id}`);
 
   if (film.duration_secs) {
     document.getElementById('heroDuration').textContent = formatDur(film.duration_secs);
@@ -2511,7 +2511,7 @@ function renderContinueWatching(films) {
     var wlClass  = 'card-wl-btn' + (saved ? ' saved' : '');
     var wlTitle  = saved ? 'Remove from watchlist' : 'Add to watchlist';
     return ''
-      + '<div class="film-card" onclick="window.location.href=\x27' + (f.slug ? '/' + esc(f.slug) : 'watch.html?id=' + esc(f.id)) + '\x27">'
+      + '<div class="film-card" onclick="window.location.href=\'' + (f.slug ? '/movie/' + f.slug : 'watch.html?id=' + esc(f.id)) + '\'">'
       + (f.badge ? '<div class="card-badge">' + esc(f.badge) + '</div>' : (f.featured ? '<div class="card-badge">Featured</div>' : ''))
       + '<div class="card-thumb">'
       + thumb
@@ -2606,7 +2606,7 @@ function openTrailer(film) {
   }
 
   // Watch button
-  document.getElementById('trailerWatchBtn').href = film.slug ? `/${esc(film.slug)}` : `watch.html?id=${esc(film.id)}`;
+  document.getElementById('trailerWatchBtn').href = film.slug ? `/movie/${esc(film.slug)}` : `watch.html?id=${esc(film.id)}`;
 
   // Clear previous video
   const oldMedia = wrap.querySelectorAll('iframe, video');
