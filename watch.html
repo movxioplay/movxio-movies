@@ -560,17 +560,22 @@ nav {
   display: block;
 }
 
-/* ── FILM PANEL (left) ── */
-.film-info { padding: 28px 0 0; }
+/* ── FILM PANEL ── */
+.film-info { padding: 24px 0 0; }
 
-/* Poster + details row */
+/* Poster column + details column */
 .film-hero {
-  display: flex; gap: 24px; align-items: flex-start; margin-bottom: 24px;
+  display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px;
+}
+
+/* ── POSTER COLUMN ── */
+.poster-col {
+  flex-shrink: 0; width: 130px; display: flex; flex-direction: column; gap: 8px;
 }
 .film-poster-wrap {
-  flex-shrink: 0; width: 120px;
-  border-radius: 8px; overflow: hidden;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06);
+  width: 100%;
+  border-radius: 6px; overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06);
   background: var(--surface2); aspect-ratio: 2/3;
   position: relative;
 }
@@ -579,120 +584,124 @@ nav {
 }
 .film-poster-ph {
   width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
-  font-size: 36px; opacity: 0.2;
+  font-size: 32px; opacity: 0.2;
 }
-.film-poster-badge {
-  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
-  background: rgba(232,71,63,0.92); color: #fff;
-  font-family: 'Space Mono', monospace; font-size: 8px; font-weight: 700;
-  letter-spacing: 0.1em; text-transform: uppercase;
-  padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+/* Trailer button — below poster */
+.trailer-btn {
+  width: 100%; padding: 8px 0;
+  background: linear-gradient(135deg, #00d2b4, #00a896);
+  color: #fff; font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 700;
+  border: none; border-radius: 6px; cursor: pointer;
+  transition: all 0.2s; letter-spacing: 0.01em;
+  box-shadow: 0 3px 12px rgba(0,210,180,0.28);
 }
+.trailer-btn:hover { background: linear-gradient(135deg, #00b89c, #008f7e); transform: translateY(-1px); }
 
+/* ── DETAILS COLUMN ── */
 .film-details { flex: 1; min-width: 0; padding-top: 2px; }
 
-/* Title line: title + year inline */
+/* Title + CTA row: title left, buttons right */
+.title-cta-row {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 10px;
+}
+.title-cta-left { flex: 1; min-width: 0; }
+
+/* Title */
 .film-title-line {
-  display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
 }
 .film-title {
   font-family: 'Syne', sans-serif; font-weight: 800;
-  font-size: clamp(22px, 4vw, 36px); letter-spacing: -0.03em; line-height: 1.05;
+  font-size: clamp(16px, 2vw, 22px); letter-spacing: -0.02em; line-height: 1.15;
   color: var(--text); margin: 0;
 }
 .film-year-badge {
   font-family: 'Syne', sans-serif; font-weight: 400;
-  font-size: clamp(18px, 3vw, 28px); color: rgba(240,238,232,0.45);
-  letter-spacing: -0.02em; line-height: 1; flex-shrink: 0;
+  font-size: clamp(13px, 1.5vw, 17px); color: rgba(240,238,232,0.4);
+  letter-spacing: -0.01em; line-height: 1; flex-shrink: 0;
 }
 
-/* ── INLINE META STRIP ── */
-.film-meta-strip {
-  display: flex; align-items: center; gap: 0; flex-wrap: wrap;
-  margin-bottom: 14px; row-gap: 6px;
+/* ── CTA BUTTONS (stacked, right of title) ── */
+.cta-col {
+  display: flex; flex-direction: column; gap: 7px;
+  flex-shrink: 0; width: 148px;
 }
-.imdb-pill {
-  display: inline-flex; align-items: center; gap: 5px;
-  background: var(--gold); color: #000;
-  font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
-  padding: 3px 7px; border-radius: 4px; letter-spacing: 0.04em;
-  flex-shrink: 0; margin-right: 10px;
+.cta-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 8px 10px;
+  border-radius: 5px; border: none;
+  font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.2s; letter-spacing: 0.01em; white-space: nowrap;
+  background: linear-gradient(135deg, #00d2b4, #00a896);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(0,210,180,0.25);
 }
-.imdb-pill .imdb-label { font-size: 9px; opacity: 0.7; }
-.meta-sep {
-  color: rgba(255,255,255,0.18); font-size: 11px; margin: 0 8px; flex-shrink: 0;
-}
-.meta-inline-item {
-  font-size: 13px; color: var(--text-dim);
-  display: inline-flex; align-items: center; gap: 4px;
-}
-.meta-inline-label {
-  font-family: 'Space Mono', monospace; font-size: 10px;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--text-muted); margin-right: 3px;
-}
+.cta-btn:hover { background: linear-gradient(135deg, #00b89c, #008f7e); transform: translateY(-1px); }
+.cta-btn-watchlist.saved { background: linear-gradient(135deg, #2dd4a0, #1db880); }
 
-/* ── EYEBROW (hidden — replaced by meta strip) ── */
-.film-eyebrow { display: none; }
-
+/* ── DESCRIPTION ── */
 .film-desc {
-  font-size: 13.5px; color: var(--text-dim); line-height: 1.75; margin-bottom: 18px;
-  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 13px; color: var(--text-dim); line-height: 1.7;
+  margin-bottom: 12px;
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
 }
 
-/* ── META TABLE (hidden on desktop, shown on mobile as fallback) ── */
-.meta-table { display: none; }
-.meta-row {
-  display: flex; align-items: baseline; gap: 0;
-  padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+/* ── 2-COLUMN INFO GRID (screenshot style) ── */
+#filmInfoTable { margin-top: 8px; }
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  padding-top: 8px;
+}
+.info-row {
+  display: flex; align-items: baseline; gap: 5px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
   font-size: 13px;
 }
-.meta-row:first-child { padding-top: 0; }
-.meta-key {
-  font-family: 'Space Mono', monospace; font-size: 10px; text-transform: uppercase;
-  letter-spacing: 0.1em; color: var(--text-muted); min-width: 90px; flex-shrink: 0;
-  padding-top: 1px;
+.info-key {
+  font-weight: 700; color: var(--text);
+  font-size: 13px; white-space: nowrap; flex-shrink: 0;
+  min-width: 62px;
 }
-.meta-val { color: var(--text-dim); line-height: 1.5; }
-.meta-val a, .meta-val .meta-link {
-  color: var(--text-dim); transition: color 0.15s; cursor: default;
-}
-.meta-val a:hover, .meta-val .meta-link:hover { color: var(--text); }
-.meta-badge {
-  display: inline-block; padding: 2px 8px; border-radius: 4px;
-  font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700;
-  letter-spacing: 0.08em; text-transform: uppercase;
-}
-.meta-badge.hd { background: var(--gold); color: #000; }
-.meta-badge.fhd { background: #fff; color: #000; }
-.meta-badge.free { background: rgba(232,71,63,0.15); color: #ff8a82; border: 1px solid rgba(232,71,63,0.25); }
-.meta-imdb { display: inline-flex; align-items: center; gap: 5px; }
-.meta-imdb .star { color: var(--gold); font-size: 13px; }
-.meta-views-badge { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--text-muted); }
+.info-val { color: var(--text-dim); font-size: 13px; line-height: 1.5; }
+.info-val a { color: #6dc8e8; transition: color 0.15s; text-decoration: none; }
+.info-val a:hover { color: #9ddff5; }
 
-/* ── ACTION ROW ── */
-.action-row {
-  display: flex; gap: 10px; flex-wrap: wrap; padding-bottom: 28px;
-  border-bottom: 1px solid var(--border);
+/* Mobile: stack everything */
+@media (max-width: 600px) {
+  .film-hero { gap: 12px; }
+  .poster-col { width: 90px; }
+  .trailer-btn { font-size: 11px; padding: 7px 0; }
+  .film-title { font-size: clamp(14px, 4.5vw, 18px); }
+  .film-year-badge { font-size: 13px; }
+  .title-cta-row { flex-direction: column; gap: 8px; }
+  .cta-col { flex-direction: row; width: 100%; }
+  .cta-btn { flex: 1; font-size: 11px; padding: 8px 6px; }
+  .info-grid { grid-template-columns: 1fr; gap: 0; }
+  .info-key { font-size: 12px; min-width: 56px; }
+  .info-val { font-size: 12px; }
+  .info-row { font-size: 12px; }
+  .film-desc { font-size: 12.5px; -webkit-line-clamp: 4; }
 }
-.action-btn {
-  display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px;
-  border-radius: 8px; border: 1px solid var(--border);
-  background: var(--surface); color: var(--text-dim);
-  font-size: 13px; font-weight: 500; cursor: pointer;
-  transition: all 0.2s; text-decoration: none;
-  font-family: 'DM Sans', sans-serif; min-height: 42px;
+@media (max-width: 380px) {
+  .poster-col { width: 76px; }
 }
-.action-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); background: var(--surface2); }
-.action-btn.copied { border-color: var(--accent); color: var(--accent); background: rgba(232,71,63,0.08); }
-.action-btn svg { width: 14px; flex-shrink: 0; }
-.action-btn-primary {
-  background: transparent; border-color: rgba(255,255,255,0.25); color: var(--text); font-weight: 600;
-}
-.action-btn-primary:hover { border-color: rgba(255,255,255,0.5); color: #fff; background: rgba(255,255,255,0.06); }
-.action-btn-primary svg { width: 14px; }
-/* Like button accent */
-.action-btn-like.active { color: var(--accent); border-color: var(--accent); background: rgba(232,71,63,0.08); }
+
+/* ── Keep old classes hidden for JS compat ── */
+.film-poster-badge { display: none; }
+.action-row { display: none; }
+.desc-btn-row { display: none; }
+.desc-col { display: none; }
+.film-meta-strip { display: none !important; }
+.meta-table { display: none; }
+.film-eyebrow { display: none; }
+.action-btn-cta, .action-btn-watchlist.old, .action-btn-tg { display: none !important; }
 
 /* ── SIDEBAR ── */
 .sidebar { padding-top: 36px; }
@@ -1057,17 +1066,8 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
 }
 
 @media (max-width: 600px) {
-  .film-hero { gap: 14px; }
+  .film-hero { gap: 12px; }
   .film-poster-wrap { width: 90px; }
-  .film-title { font-size: clamp(17px, 5vw, 22px); margin-bottom: 8px; }
-  .film-year-badge { font-size: clamp(14px, 4vw, 18px); }
-  .film-desc { font-size: 13px; -webkit-line-clamp: 3; margin-bottom: 14px; }
-  .film-meta-strip { gap: 0; row-gap: 4px; }
-  .meta-inline-item { font-size: 12px; }
-  .action-row { gap: 7px; padding-bottom: 20px; }
-  .action-btn { font-size: 12px; padding: 9px 14px; min-height: 40px; }
-  .meta-sep { display: none !important; }
-  .film-meta-strip { flex-direction: column; align-items: flex-start; gap: 4px; }
 }
 
 @media (max-width: 380px) {
@@ -1746,20 +1746,16 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
 
 <!-- Film action bar -->
 <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-  <div id="infoTitleBar" style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;"></div>
+  <div id="infoTitleBar" style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;"></div>
   <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-    <button class="reaction-btn" id="likeBtn" onclick="react('like')" style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);padding:11px 18px;border-radius:40px;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.2s;min-height:44px;">
-      <svg viewBox="0 0 24 24" width="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
-      <span id="likeCount">0</span>
-    </button>
-    <button class="reaction-btn" id="dislikeBtn" onclick="react('dislike')" style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);padding:11px 18px;border-radius:40px;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.2s;min-height:44px;">
-      <svg viewBox="0 0 24 24" width="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/><path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>
-      <span id="dislikeCount">0</span>
-    </button>
     <button onclick="openShare()" style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);padding:11px 18px;border-radius:40px;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.2s;min-height:44px;">
       <svg viewBox="0 0 24 24" width="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
       Share
     </button>
+    <button class="reaction-btn" id="likeBtn" onclick="react('like')" style="display:none;"></button>
+    <button class="reaction-btn" id="dislikeBtn" onclick="react('dislike')" style="display:none;"></button>
+    <span id="likeCount" style="display:none;">0</span>
+    <span id="dislikeCount" style="display:none;">0</span>
   </div>
 </div>
 
@@ -1768,89 +1764,64 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
   <div class="film-info">
     <div class="film-hero">
       <!-- Poster -->
-      <div class="film-poster-wrap" id="filmPosterWrap">
-        <span class="skel skel-poster" id="filmPosterSkel"></span>
-        <div class="film-poster-ph" id="filmPosterPh" style="display:none;">🎬</div>
-        <div class="film-poster-badge">Free</div>
+      <!-- POSTER + TRAILER BUTTON (left column) -->
+      <div class="poster-col">
+        <div class="film-poster-wrap" id="filmPosterWrap">
+          <span class="skel skel-poster" id="filmPosterSkel"></span>
+          <div class="film-poster-ph" id="filmPosterPh" style="display:none;">🎬</div>
+        </div>
+        <!-- Trailer button: fires popunder only, no navigation -->
+        <button class="trailer-btn" onclick="fireTrailerPopunder()">▶ Trailer</button>
       </div>
 
-      <!-- Details -->
+      <!-- DETAILS (right column) -->
       <div class="film-details">
 
-        <!-- Title + year -->
-        <span class="skel skel-title" id="skelTitle" style="width:55%;height:38px;"></span>
-        <div class="film-title-line" id="filmTitleLine" style="display:none;">
-          <h1 class="film-title" id="filmTitle"></h1>
-          <span class="film-year-badge" id="filmYear"></span>
-        </div>
-
-        <!-- Inline meta strip: IMDb · Genre · Duration · Country · Director -->
-        <span class="skel skel-eyebrow" id="skelEyebrow" style="width:70%;margin-bottom:14px;"></span>
-        <div class="film-meta-strip" id="filmMetaStrip" style="display:none;">
-          <span class="imdb-pill" id="metaImdb" style="display:none;">
-            <span class="imdb-label">IMDb</span>
-            <span id="metaImdbScore"></span>
-          </span>
-          <span class="meta-inline-item" id="metaGenre" style="display:none;"></span>
-          <span class="meta-sep" id="metaSep1" style="display:none;">|</span>
-          <span class="meta-inline-item" id="metaDuration" style="display:none;">
-            <span class="meta-inline-label">Duration:</span>
-            <span id="metaDurationVal"></span>
-          </span>
-          <span class="meta-sep" id="metaSep2" style="display:none;">|</span>
-          <span class="meta-inline-item" id="metaCountry" style="display:none;">
-            <span class="meta-inline-label">Country:</span>
-            <span id="metaCountryVal"></span>
-          </span>
-          <span class="meta-sep" id="metaSep3" style="display:none;">|</span>
-          <span class="meta-inline-item" id="metaDirector" style="display:none;">
-            <span class="meta-inline-label">Director:</span>
-            <span id="metaDirectorVal"></span>
-          </span>
-          <span class="meta-sep" id="metaSep4" style="display:none;">|</span>
-          <span class="meta-inline-item" id="metaActors" style="display:none;">
-            <span class="meta-inline-label">Cast:</span>
-            <span id="metaActorsVal"></span>
-          </span>
-          <span class="meta-sep" id="metaSep5" style="display:none;">|</span>
-          <span class="meta-inline-item" id="metaQuality" style="display:none;">
-            <span class="meta-inline-label">Quality:</span>
-            <span style="background:var(--gold);color:#000;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:0.06em;">HD</span>
-          </span>
-        </div>
-
-        <!-- Action buttons -->
-        <div class="action-row" style="margin-bottom:16px;">
-          <button class="action-btn action-btn-primary" onclick="document.getElementById('playerContainer').scrollIntoView({behavior:'smooth'})">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="13"><path d="M8 5v14l11-7z"/></svg>
-            Trailer
-          </button>
-          <button class="action-btn action-btn-like" id="likeBtn2" onclick="react('like')" style="gap:7px;">
-            <svg viewBox="0 0 24 24" width="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
-            Like
-          </button>
-          <button class="action-btn" id="wlBtn2" onclick="toggleNavWatchlist()" style="gap:7px;">
-            <svg viewBox="0 0 24 24" width="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            <span id="wlBtn2Text">Add</span>
-          </button>
-          <button class="action-btn" id="shareBtn" onclick="copyLink()" style="gap:7px;">
-            <svg viewBox="0 0 24 24" width="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-            Share
-          </button>
-          <button class="action-btn" id="reportBtn" onclick="openReportModal()" title="Report an issue with this film" style="color:var(--text-muted);opacity:0.4;pointer-events:none;" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Report
-          </button>
+        <!-- Title + Year + CTA buttons row -->
+        <div class="title-cta-row">
+          <div class="title-cta-left">
+            <span class="skel skel-title" id="skelTitle" style="width:60%;height:26px;margin-bottom:8px;display:block;"></span>
+            <div class="film-title-line" id="filmTitleLine" style="display:none;">
+              <h1 class="film-title" id="filmTitle"></h1>
+              <span class="film-year-badge" id="filmYear"></span>
+            </div>
+          </div>
+          <div class="cta-col">
+            <button class="cta-btn cta-btn-watchlist" id="wlBtn2" onclick="toggleNavWatchlist()">
+              🔖 <span id="wlBtn2Text">Add to Watchlist</span>
+            </button>
+            <a class="cta-btn cta-btn-tg" href="https://t.me/movxiomovies" target="_blank" rel="noopener">
+              📲 Join &amp; Download
+            </a>
+          </div>
         </div>
 
         <!-- Description -->
         <span class="skel skel-line w90" id="skelDesc1"></span>
         <span class="skel skel-line w80" id="skelDesc2" style="margin-bottom:4px;"></span>
-        <span class="skel skel-line w60" id="skelDesc3" style="margin-bottom:16px;"></span>
-        <p class="film-desc" id="filmDesc" style="-webkit-line-clamp:4;display:none;-webkit-box-orient:vertical;overflow:hidden;"></p>
-        <button id="expandDescBtn" onclick="toggleDesc()" style="display:none;background:none;border:none;color:var(--accent);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;padding:0;margin-bottom:14px;">Show more ↓</button>
+        <span class="skel skel-line w60" id="skelDesc3" style="margin-bottom:12px;"></span>
+        <p class="film-desc" id="filmDesc" style="display:none;"></p>
+        <button id="expandDescBtn" onclick="toggleDesc()" style="display:none;background:none;border:none;color:var(--accent);font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;padding:0;margin-bottom:10px;">Show more ↓</button>
 
-        <!-- Legacy meta table (hidden, kept for JS compat) -->
+        <!-- 2-column info grid: left=Genre/Director/Country/Actor, right=Duration/Quality/Release/IMDb -->
+        <span class="skel skel-eyebrow" id="skelEyebrow" style="width:70%;margin-bottom:8px;display:block;"></span>
+        <div id="filmInfoTable" style="display:none;"></div>
+
+        <!-- Hidden legacy strips (JS compat) -->
+        <div class="film-meta-strip" id="filmMetaStrip" style="display:none;">
+          <span id="metaImdb" style="display:none;"><span id="metaImdbScore"></span></span>
+          <span id="metaGenre" style="display:none;"></span>
+          <span id="metaSep1" style="display:none;"></span>
+          <span id="metaDuration" style="display:none;"><span id="metaDurationVal"></span></span>
+          <span id="metaSep2" style="display:none;"></span>
+          <span id="metaCountry" style="display:none;"><span id="metaCountryVal"></span></span>
+          <span id="metaSep3" style="display:none;"></span>
+          <span id="metaDirector" style="display:none;"><span id="metaDirectorVal"></span></span>
+          <span id="metaSep4" style="display:none;"></span>
+          <span id="metaActors" style="display:none;"><span id="metaActorsVal"></span></span>
+          <span id="metaSep5" style="display:none;"></span>
+          <span id="metaQuality" style="display:none;"></span>
+        </div>
         <div class="meta-table" id="filmMetaTable" style="display:none;"></div>
         <div class="film-eyebrow" id="filmEyebrow" style="display:none;"></div>
 
@@ -1892,73 +1863,11 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
 </div><!-- /master-layout -->
 
 
-<!-- ══ REVIEWS & RATINGS SECTION ══ -->
-<div class="reviews-section" id="reviewsSection" style="display:none;">
-  <!-- Header -->
-  <div class="reviews-header">
-    <div class="reviews-title">
-      Reviews
-      <span class="review-count" id="reviewCount"></span>
-    </div>
-    <div class="reviews-avg" id="reviewsAvg" style="display:none;">
-      <div>
-        <div class="avg-score" id="avgScore">—</div>
-        <div class="avg-label">avg rating</div>
-      </div>
-      <div class="avg-stars" id="avgStars"></div>
-    </div>
-  </div>
+<!-- ══ REVIEWS & RATINGS SECTION — removed ══ -->
 
-  <!-- Rating breakdown bars -->
-  <div class="rating-breakdown" id="ratingBreakdown" style="display:none;">
-    <div class="rating-bar-row" id="bar5"><div class="rating-bar-label">5★</div><div class="rating-bar-track"><div class="rating-bar-fill" style="width:0%"></div></div><div class="rating-bar-count">0</div></div>
-    <div class="rating-bar-row" id="bar4"><div class="rating-bar-label">4★</div><div class="rating-bar-track"><div class="rating-bar-fill" style="width:0%"></div></div><div class="rating-bar-count">0</div></div>
-    <div class="rating-bar-row" id="bar3"><div class="rating-bar-label">3★</div><div class="rating-bar-track"><div class="rating-bar-fill" style="width:0%"></div></div><div class="rating-bar-count">0</div></div>
-    <div class="rating-bar-row" id="bar2"><div class="rating-bar-label">2★</div><div class="rating-bar-track"><div class="rating-bar-fill" style="width:0%"></div></div><div class="rating-bar-count">0</div></div>
-    <div class="rating-bar-row" id="bar1"><div class="rating-bar-label">1★</div><div class="rating-bar-track"><div class="rating-bar-fill" style="width:0%"></div></div><div class="rating-bar-count">0</div></div>
-  </div>
-
-  <!-- Write a review -->
-  <div class="review-form-wrap" id="reviewFormWrap">
-    <div class="review-form-title">Write a Review</div>
-    <div class="star-picker" id="starPicker">
-      <button class="star-btn" data-star="1">★</button>
-      <button class="star-btn" data-star="2">★</button>
-      <button class="star-btn" data-star="3">★</button>
-      <button class="star-btn" data-star="4">★</button>
-      <button class="star-btn" data-star="5">★</button>
-    </div>
-    <input type="text" class="review-name-input" id="reviewName" placeholder="Your name (optional)" maxlength="40" autocomplete="off">
-    <textarea class="review-textarea" id="reviewText" placeholder="Share your thoughts about this film..." maxlength="800"></textarea>
-    <div class="review-form-footer">
-      <span class="review-char-count"><span id="reviewCharCount">0</span>/800</span>
-      <button class="review-submit-btn" id="reviewSubmitBtn" onclick="submitReview()">
-        <svg viewBox="0 0 24 24" width="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
-        Post Review
-      </button>
-    </div>
-  </div>
-
-  <!-- Already reviewed message -->
-  <div id="alreadyReviewed" style="display:none; margin-bottom:20px;">
-    <div class="review-already-msg">
-      <svg viewBox="0 0 24 24" width="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-      You've already reviewed this film. Thanks for the feedback!
-    </div>
-  </div>
-
-  <!-- Reviews list -->
-  <div class="reviews-list" id="reviewsList"></div>
-
-  <!-- Load more -->
-  <div class="reviews-load-more" id="reviewsLoadMore" style="display:none;">
-    <button class="load-more-btn" onclick="loadMoreReviews()">Load More Reviews</button>
-  </div>
-</div>
-
-<div class="more-section" id="moreSection" style="display:none;">
+<div class="more-section" id="moreSection">
   <div class="more-header">
-    <div class="more-title">More to Watch</div>
+    <div class="more-title">Related Films</div>
   </div>
   <div class="film-grid" id="moreGrid"></div>
 </div>
@@ -3005,43 +2914,41 @@ function renderInfo(film) {
   if (yearEl && film.year) yearEl.textContent = '(' + film.year + ')';
   if (titleLine) { titleLine.style.display = 'flex'; document.getElementById('skelTitle').style.display = 'none'; }
 
-  // Populate inline meta strip
+  // Build 2-column info grid matching screenshot
+  // Left col: Genre, Director, Country, Actor(last)
+  // Right col: Duration, Quality, Release, IMDb
   const strip = document.getElementById('filmMetaStrip');
-  if (strip) {
-    if (film.imdb_rating) {
-      document.getElementById('metaImdbScore').textContent = film.imdb_rating;
-      document.getElementById('metaImdb').style.display = 'inline-flex';
-    }
-    if (genres.length) {
-      const genreEl = document.getElementById('metaGenre');
-      genreEl.textContent = genres.map(g => g.charAt(0).toUpperCase() + g.slice(1)).join(', ');
-      genreEl.style.display = 'inline-flex';
-    }
-    if (film.duration_secs) {
-      document.getElementById('metaDurationVal').textContent = formatDur(film.duration_secs);
-      document.getElementById('metaDuration').style.display = 'inline-flex';
-      document.getElementById('metaSep1').style.display = 'inline';
-    }
-    if (film.country) {
-      document.getElementById('metaCountryVal').textContent = film.country;
-      document.getElementById('metaCountry').style.display = 'inline-flex';
-      document.getElementById('metaSep2').style.display = 'inline';
-    }
-    if (film.director) {
-      document.getElementById('metaDirectorVal').textContent = film.director;
-      document.getElementById('metaDirector').style.display = 'inline-flex';
-      document.getElementById('metaSep3').style.display = 'inline';
-    }
-    if (film.actors) {
-      document.getElementById('metaActorsVal').textContent = film.actors;
-      document.getElementById('metaActors').style.display = 'inline-flex';
-      document.getElementById('metaSep4').style.display = 'inline';
-    }
-    // Quality: always show HD badge
-    document.getElementById('metaQuality').style.display = 'inline-flex';
-    document.getElementById('metaSep5').style.display = 'inline';
-    strip.style.display = 'flex';
-    document.getElementById('skelEyebrow').style.display = 'none';
+  if (strip) strip.style.display = 'none';
+  document.getElementById('skelEyebrow').style.display = 'none';
+
+  const leftRows = [];
+  const rightRows = [];
+
+  if (genres.length) {
+    const genreLinks = genres.map(g => `<a href="/browse.html?genre=${encodeURIComponent(g)}">${esc(g.charAt(0).toUpperCase()+g.slice(1))}</a>`).join(', ');
+    leftRows.push({ key: 'Genre', val: genreLinks });
+  }
+  if (film.director) leftRows.push({ key: 'Director', val: `<span>${esc(film.director)}</span>` });
+  if (film.country)  leftRows.push({ key: 'Country',  val: `<a href="/browse.html?country=${encodeURIComponent(film.country)}">${esc(film.country)}</a>` });
+  // Actor last — can be long with many names
+  if (film.actors)   leftRows.push({ key: 'Actor',    val: film.actors.split(',').slice(0,5).map(a => `<a href="/browse.html?q=${encodeURIComponent(a.trim())}">${esc(a.trim())}</a>`).join(', ') });
+
+  if (film.duration_secs) rightRows.push({ key: 'Duration', val: formatDur(film.duration_secs) });
+  rightRows.push({ key: 'Quality', val: '<span style="background:var(--gold);color:#000;font-family:\'Space Mono\',monospace;font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;letter-spacing:0.06em;">HD</span>' });
+  if (film.year)        rightRows.push({ key: 'Release', val: `<span style="color:var(--accent);">${esc(String(film.year))}</span>` });
+  if (film.imdb_rating) rightRows.push({ key: 'IMDb',    val: `<span style="color:var(--gold);">★ ${esc(String(film.imdb_rating))}</span>` });
+
+  const maxLen = Math.max(leftRows.length, rightRows.length);
+  let leftHTML = '', rightHTML = '';
+  for (let i = 0; i < maxLen; i++) {
+    if (leftRows[i])  leftHTML  += `<div class="info-row"><span class="info-key">${esc(leftRows[i].key)}:</span><span class="info-val">${leftRows[i].val}</span></div>`;
+    if (rightRows[i]) rightHTML += `<div class="info-row"><span class="info-key">${esc(rightRows[i].key)}:</span><span class="info-val">${rightRows[i].val}</span></div>`;
+  }
+
+  const infoTableEl = document.getElementById('filmInfoTable');
+  if (infoTableEl) {
+    infoTableEl.innerHTML = `<div class="info-grid"><div>${leftHTML}</div><div>${rightHTML}</div></div>`;
+    infoTableEl.style.display = 'block';
   }
 
   document.getElementById('filmTitle').textContent = film.title;
@@ -3068,7 +2975,8 @@ function renderInfo(film) {
   const expandBtn = document.getElementById('expandDescBtn');
   const desc = film.description || '';
   descEl.textContent = desc;
-  if (expandBtn) expandBtn.style.display = desc.length > 200 ? 'inline-block' : 'none';
+  descEl.style.display = 'block';
+  if (expandBtn) expandBtn.style.display = desc.length > 220 ? 'inline-block' : 'none';
 
   // Poster
   const ph = document.getElementById('filmPosterPh');
@@ -3209,6 +3117,16 @@ function renderRelated(films, currentId, currentGenres, currentFilm) {
   }
 }
 
+// ── Trailer button — fires popunder only, no navigation ──────
+function fireTrailerPopunder() {
+  try {
+    var s = document.createElement('script');
+    s.dataset.zone = '10865583';
+    s.src = 'https://al5sm.com/tag.min.js';
+    document.body.appendChild(s);
+  } catch(e) {}
+}
+
 function copyLink() {
   navigator.clipboard.writeText(location.href).then(() => {
     const btn = document.getElementById('shareBtn');
@@ -3238,13 +3156,11 @@ function updateNavWlBtn(saved) {
   if (!btn || !txt) return;
   btn.className = saved ? 'nav-btn saved' : 'nav-btn';
   txt.textContent = saved ? 'Saved ✓' : 'Watchlist';
-  // Also update secondary Add button in film panel
   const wl2 = document.getElementById('wlBtn2');
   const wl2txt = document.getElementById('wlBtn2Text');
   if (wl2 && wl2txt) {
-    wl2txt.textContent = saved ? 'Saved ✓' : 'Add';
-    wl2.style.color = saved ? 'var(--green)' : '';
-    wl2.style.borderColor = saved ? 'var(--green)' : '';
+    wl2txt.textContent = saved ? 'Saved ✓' : 'Add to Watchlist';
+    wl2.classList.toggle('saved', saved);
   }
 }
 
