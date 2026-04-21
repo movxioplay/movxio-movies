@@ -1,9 +1,0 @@
-# Existing redirects
-/home    /index.html    301
-/movies  /browse.html   301
-
-# Legacy UUID watch links → keep working (301 requires server-side slug lookup, 
-# so just let the JS handle it client-side via the existing ?id= fallback)
-
-# Clean slug URLs → serve watch.html (JS picks up slug from pathname)
-/:slug   /watch.html    200
