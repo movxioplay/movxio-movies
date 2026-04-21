@@ -1,3 +1,12 @@
-# MOVXIO — Cloudflare Pages redirect rules
-# Pretty movie URLs: /movie/close-range  →  /watch.html?slug=close-range
-/movie/*  /watch.html?slug=:splat  200
+# MOVXIO — Cloudflare Pages _redirects
+
+# ── Static page aliases ────────────────────────────────────────
+/home    /index.html    301
+/movies  /browse.html   301
+
+# ── Bare /film → browse ────────────────────────────────────────
+/film    /browse.html   302
+
+# ── Clean film URL — worker handles actual slug routing,
+#    this 200 rewrite is a fallback so Pages doesn't 404.
+/film/*  /watch.html   200
