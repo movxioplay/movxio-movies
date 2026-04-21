@@ -297,6 +297,15 @@ export default {
       if (filmId && isCrawler(ua)) {
         return handleWatchOG(request, filmId, env);
       }
+
+      // For all other cases (/watch, /watch/, regular browsers):
+      // Always explicitly serve watch.html — never let a bare /watch
+      // fall through to ASSETS which has no extensionless file to serve.
+      const watchHtmlReq = new Request(`${url.origin}/watch.html?${url.searchParams}`, {
+        method:  request.method,
+        headers: request.headers,
+      });
+      return env.ASSETS.fetch(watchHtmlReq);
     }
 
     // ── Route 3: Clean slug URLs e.g. /close-range ────────────
