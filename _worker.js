@@ -67,7 +67,7 @@ async function fetchAllFilms() {
 
   while (true) {
     const url = `${SUPABASE_URL}/rest/v1/films`
-      + `?select=id,created_at,updated_at`
+      + `?select=id,slug,created_at,updated_at`
       + `&status=eq.active`
       + `&order=created_at.desc`
       + `&limit=${limit}&offset=${offset}`;
@@ -98,7 +98,7 @@ function buildSitemap(films) {
 
   const filmUrls = films.map(f => `
   <url>
-    <loc>${SITE_URL}/watch.html?id=${escXml(f.id)}</loc>
+    <loc>${SITE_URL}/${escXml(f.slug || 'watch.html?id=' + f.id)}</loc>
     <lastmod>${toISODate(f.updated_at || f.created_at)}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -158,10 +158,15 @@ function isCrawler(ua) {
   return CRAWLER_UA.some(p => u.includes(p));
 }
 
-async function fetchFilm(id) {
+async function fetchFilm(idOrSlug) {
+  // Detect if it's a UUID or a slug
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+  const filter = isUUID
+    ? `id=eq.${encodeURIComponent(idOrSlug)}`
+    : `slug=eq.${encodeURIComponent(idOrSlug)}`;
   const url = `${SUPABASE_URL}/rest/v1/films`
-    + `?id=eq.${encodeURIComponent(id)}`
-    + `&select=id,title,description,thumbnail_url,genre,year,imdb_rating`
+    + `?${filter}`
+    + `&select=id,title,description,thumbnail_url,genre,year,imdb_rating,slug`
     + `&limit=1`;
   const res = await fetch(url, { headers: supaHeaders() });
   if (!res.ok) return null;
@@ -180,7 +185,9 @@ class OGRewriter {
       ? film.description.slice(0, 160)
       : `Watch ${title} free on ${SITE_NAME} — no account needed.`;
     const image  = film.thumbnail_url || DEFAULT_IMG;
-    const watchUrl = `${SITE_URL}/watch.html?id=${film.id}`;
+    const watchUrl = film.slug
+      ? `${SITE_URL}/${film.slug}`
+      : `${SITE_URL}/watch.html?id=${film.id}`;
 
     this.data = {
       pageTitle:      `${title}${year} — Watch Free on ${SITE_NAME}`,
@@ -285,6 +292,31 @@ export default {
       if (filmId && isCrawler(ua)) {
         return handleWatchOG(request, filmId, env);
       }
+    }
+
+    // ── Route 3: Clean slug URLs e.g. /close-range ────────────
+    // Match single-segment paths with no file extension (not /browse.html etc.)
+    const isSlugUrl = /^\/[a-z0-9][a-z0-9\-]*[a-z0-9]$/.test(path) && !path.includes('.');
+    if (isSlugUrl && method === 'GET') {
+      const slug = path.slice(1); // strip leading /
+      const ua   = request.headers.get('user-agent') || '';
+
+      if (isCrawler(ua)) {
+        // Crawlers: rewrite to watch.html and inject dynamic OG meta by slug
+        const watchReq = new Request(`${url.origin}/watch.html${url.search}`, {
+          method: request.method,
+          headers: request.headers,
+        });
+        return handleWatchOG(watchReq, slug, env);
+      }
+
+      // Regular users: serve watch.html transparently (URL stays /close-range)
+      return env.ASSETS.fetch(
+        new Request(`${url.origin}/watch.html`, {
+          method: request.method,
+          headers: request.headers,
+        })
+      );
     }
 
     // ── Everything else: serve static files from Pages ────────
