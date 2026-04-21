@@ -1975,8 +1975,12 @@ function esc(s) { if(!s)return''; return String(s).replace(/&/g,'&amp;').replace
 function formatDur(s) { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; }
 function formatTime(s) { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=Math.floor(s%60); if(h>0)return`${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; return`${m}:${String(sec).padStart(2,'0')}`; }
 
-const filmId = new URLSearchParams(location.search).get('id');
-console.log('[MOVXIO] watch.html | URL:', location.href, '| filmId:', filmId);
+const _params  = new URLSearchParams(location.search);
+const filmId   = _params.get('id');   // legacy UUID links (/watch.html?id=UUID) still work
+// Clean slug: pathname like /close-range  →  filmSlug = "close-range"
+const _rawPath = location.pathname.replace(/^\//, '').replace(/\/$/, '');
+const filmSlug = (_rawPath && _rawPath !== 'watch.html' && _rawPath !== 'watch') ? _rawPath : null;
+console.log('[MOVXIO] watch.html | URL:', location.href, '| filmId:', filmId, '| filmSlug:', filmSlug);
 let player = null;
 let currentFilm = null;
 let controlsTimer = null;
@@ -2784,7 +2788,7 @@ function renderInfo(film) {
   const _metaDesc = document.querySelector('meta[name="description"]');
   if (_metaDesc) _metaDesc.setAttribute('content', `Watch ${film.title} free on MOVXIO. No account needed.`);
   const _canonical = document.querySelector('link[rel="canonical"]');
-  if (_canonical) _canonical.setAttribute('href', `https://movxio.com/watch.html?id=${encodeURIComponent(film.id)}`);
+  if (_canonical) _canonical.setAttribute('href', `https://movxio.com/${film.slug || 'watch.html?id=' + encodeURIComponent(film.id)}`);
   const _ogUrl    = document.querySelector('meta[property="og:url"]');
   if (_ogUrl) _ogUrl.setAttribute('content', location.href);
   const _ogTitle  = document.querySelector('meta[property="og:title"]');
@@ -3032,7 +3036,7 @@ function renderRelated(films, currentId, currentGenres, currentFilm) {
   }
 
   document.getElementById('relatedList').innerHTML = sidebarFilms.map(f => `
-    <a class="related-card" href="watch.html?id=${esc(f.id)}">
+    <a class="related-card" href="${f.slug ? '/' + esc(f.slug) : 'watch.html?id=' + esc(f.id)}">
       ${f.thumbnail_url
         ? `<img class="related-thumb" src="${esc(f.thumbnail_url)}" alt="${esc(f.title)}" loading="lazy">`
         : `<div class="related-thumb-ph">🎬</div>`}
@@ -3055,7 +3059,7 @@ function renderRelated(films, currentId, currentGenres, currentFilm) {
       const imdb  = f.imdb_rating ? `★ ${f.imdb_rating}` : '';
       const year  = f.year ? String(f.year) : '';
       const meta  = [year, imdb].filter(Boolean).join(' · ');
-      return `<div class="film-card" onclick="window.location.href='watch.html?id=${esc(f.id)}'">
+      return `<div class="film-card" onclick="window.location.href='${f.slug ? '/' + esc(f.slug) : 'watch.html?id=' + esc(f.id)}'">
         <div class="card-thumb">${thumb}
           <div class="card-overlay">
             <div class="card-play"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6V2z"/></svg></div>
@@ -3750,10 +3754,14 @@ async function init() {
     clearTimeout(slowTimer);
     console.log('[MOVXIO] Films loaded:', films.length, '| filmId:', filmId);
 
-    // Safe film lookup — String cast handles UUID vs string mismatches
-    const film = filmId
-      ? (films.find(f => String(f.id) === String(filmId)) || films[0])
-      : films[0];
+    // Safe film lookup — slug takes priority (SEO URLs), falls back to UUID, then first film
+    const film = filmSlug
+      ? (films.find(f => f.slug === filmSlug) ||
+         (filmId ? films.find(f => String(f.id) === String(filmId)) : null) ||
+         films[0])
+      : filmId
+        ? (films.find(f => String(f.id) === String(filmId)) || films[0])
+        : films[0];
 
     if (!film) {
       document.getElementById('playerLoading').style.display = 'none';
