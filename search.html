@@ -661,7 +661,7 @@ function filmCard(film, idx = 0) {
   const badgeClass = film.badge === 'New' ? 'new' : film.badge === 'Classic' ? 'classic' : film.badge === 'Coming Soon' ? 'coming' : '';
   const saved = isInWatchlist(film.id);
   return `
-  <div class="film-card" onclick="trackAndGo('${esc(film.id)}')">
+  <div class="film-card" onclick="trackAndGo('${esc(film.id)}','${esc(film.slug||'')}')">
     ${film.badge ? `<div class="card-badge ${badgeClass}">${esc(film.badge)}</div>` : ''}
     <div class="card-thumb">
       ${thumb}
@@ -686,12 +686,12 @@ function filmCard(film, idx = 0) {
   </div>`;
 }
 
-function trackAndGo(id) {
+function trackAndGo(id, slug) {
   // Track recently viewed
   let history = JSON.parse(localStorage.getItem('mvx_history')||'[]');
   history = [id, ...history.filter(i => i !== id)].slice(0, 30);
   localStorage.setItem('mvx_history', JSON.stringify(history));
-  window.location.href = `watch.html?id=${id}`;
+  window.location.href = slug ? `/${slug}` : `watch.html?id=${id}`;
 }
 
 // ── GENRE ─────────────────────────────────────────────────────
