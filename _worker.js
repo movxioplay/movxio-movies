@@ -27,9 +27,9 @@ const DEFAULT_IMG  = `${SITE_URL}/og-default.jpg`;
 // ─────────────────────────────────────────────────────────────
 function supaHeaders() {
   return {
-    'apikey':          SUPABASE_KEY,
-    'Authorization':   `Bearer ${SUPABASE_KEY}`,
-    'Cache-Control':   'no-cache',
+    'apikey':        SUPABASE_KEY,
+    'Authorization': `Bearer ${SUPABASE_KEY}`,
+    'Cache-Control': 'no-cache',
   };
 }
 
@@ -159,7 +159,6 @@ function isCrawler(ua) {
 }
 
 async function fetchFilm(idOrSlug) {
-  // Detect if it's a UUID or a slug
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
   const filter = isUUID
     ? `id=eq.${encodeURIComponent(idOrSlug)}`
@@ -174,97 +173,104 @@ async function fetchFilm(idOrSlug) {
   return data && data.length ? data[0] : null;
 }
 
-// HTMLRewriter handler — rewrites OG/Twitter meta tags in place
-class OGRewriter {
-  constructor(film) {
-    const title  = film.title || SITE_NAME;
-    const year   = film.year  ? ` (${film.year})` : '';
-    const rating = film.imdb_rating ? ` · ★${film.imdb_rating}` : '';
-    const genre  = film.genre ? film.genre.split(',')[0].trim() : '';
-    const desc   = film.description
-      ? film.description.slice(0, 160)
-      : `Watch ${title} free on ${SITE_NAME} — no account needed.`;
-    const image  = film.thumbnail_url || DEFAULT_IMG;
-    const watchUrl = film.slug
-      ? `${SITE_URL}/${film.slug}`
-      : `${SITE_URL}/watch.html?id=${film.id}`;
+// ─────────────────────────────────────────────────────────────
+// FIX: Separate handler classes per selector type.
+// Cloudflare HTMLRewriter throws if the same handler instance
+// is registered on multiple .on() calls.
+// ─────────────────────────────────────────────────────────────
 
-    this.data = {
-      pageTitle:      `${title}${year} — Watch Free on ${SITE_NAME}`,
-      description:    desc,
-      'og:title':     `${title}${year} — ${SITE_NAME}`,
-      'og:description': desc,
-      'og:image':     image,
-      'og:image:width':  '600',
-      'og:image:height': '900',
-      'og:image:alt': `${title} poster`,
-      'og:url':       watchUrl,
-      'og:type':      'video.movie',
-      'og:site_name': SITE_NAME,
-      'twitter:card':        'summary_large_image',
-      'twitter:title':       `${title}${year}${rating}`,
-      'twitter:description': desc,
-      'twitter:image':       image,
-      'twitter:image:alt':   `${title} poster`,
-      canonical:      watchUrl,
-      keywords:       `${title}, watch free, ${genre}, ${SITE_NAME}, free movies`,
-    };
-  }
+function buildOGData(film) {
+  const title    = film.title || SITE_NAME;
+  const year     = film.year         ? ` (${film.year})` : '';
+  const rating   = film.imdb_rating  ? ` · ★${film.imdb_rating}` : '';
+  const genre    = film.genre        ? film.genre.split(',')[0].trim() : '';
+  const desc     = film.description
+    ? film.description.slice(0, 160)
+    : `Watch ${title} free on ${SITE_NAME} — no account needed.`;
+  const image    = film.thumbnail_url || DEFAULT_IMG;
+  const watchUrl = film.slug
+    ? `${SITE_URL}/${film.slug}`
+    : `${SITE_URL}/watch.html?id=${film.id}`;
 
+  return {
+    pageTitle:           `${title}${year} — Watch Free on ${SITE_NAME}`,
+    description:         desc,
+    keywords:            `${title}, watch free, ${genre}, ${SITE_NAME}, free movies`,
+    'og:title':          `${title}${year} — ${SITE_NAME}`,
+    'og:description':    desc,
+    'og:image':          image,
+    'og:image:width':    '600',
+    'og:image:height':   '900',
+    'og:image:alt':      `${title} poster`,
+    'og:url':            watchUrl,
+    'og:type':           'video.movie',
+    'og:site_name':      SITE_NAME,
+    'twitter:card':      'summary_large_image',
+    'twitter:title':     `${title}${year}${rating}`,
+    'twitter:description': desc,
+    'twitter:image':     image,
+    'twitter:image:alt': `${title} poster`,
+    canonical:           watchUrl,
+  };
+}
+
+class TitleHandler {
+  constructor(d) { this.d = d; }
+  element(el) { el.setInnerContent(this.d.pageTitle); }
+}
+
+class MetaNameHandler {
+  constructor(d) { this.d = d; }
   element(el) {
-    const tag  = el.tagName.toLowerCase();
-    const d    = this.data;
-
-    if (tag === 'title') {
-      el.setInnerContent(d.pageTitle);
-      return;
-    }
-
-    if (tag === 'meta') {
-      const name = el.getAttribute('name')     || '';
-      const prop = el.getAttribute('property') || '';
-
-      if (name === 'description')           el.setAttribute('content', d.description);
-      if (name === 'keywords')              el.setAttribute('content', d.keywords);
-      if (name === 'twitter:card')          el.setAttribute('content', d['twitter:card']);
-      if (name === 'twitter:title')         el.setAttribute('content', d['twitter:title']);
-      if (name === 'twitter:description')   el.setAttribute('content', d['twitter:description']);
-      if (name === 'twitter:image')         el.setAttribute('content', d['twitter:image']);
-      if (name === 'twitter:image:alt')     el.setAttribute('content', d['twitter:image:alt']);
-
-      if (prop === 'og:title')              el.setAttribute('content', d['og:title']);
-      if (prop === 'og:description')        el.setAttribute('content', d['og:description']);
-      if (prop === 'og:image')              el.setAttribute('content', d['og:image']);
-      if (prop === 'og:image:width')        el.setAttribute('content', d['og:image:width']);
-      if (prop === 'og:image:height')       el.setAttribute('content', d['og:image:height']);
-      if (prop === 'og:image:alt')          el.setAttribute('content', d['og:image:alt']);
-      if (prop === 'og:url')                el.setAttribute('content', d['og:url']);
-      if (prop === 'og:type')               el.setAttribute('content', d['og:type']);
-      if (prop === 'og:site_name')          el.setAttribute('content', d['og:site_name']);
-    }
-
-    if (tag === 'link' && el.getAttribute('rel') === 'canonical') {
-      el.setAttribute('href', d.canonical);
-    }
+    const name = el.getAttribute('name') || '';
+    const d = this.d;
+    if (name === 'description')          el.setAttribute('content', d.description);
+    if (name === 'keywords')             el.setAttribute('content', d.keywords);
+    if (name === 'twitter:card')         el.setAttribute('content', d['twitter:card']);
+    if (name === 'twitter:title')        el.setAttribute('content', d['twitter:title']);
+    if (name === 'twitter:description')  el.setAttribute('content', d['twitter:description']);
+    if (name === 'twitter:image')        el.setAttribute('content', d['twitter:image']);
+    if (name === 'twitter:image:alt')    el.setAttribute('content', d['twitter:image:alt']);
   }
 }
 
+class MetaPropHandler {
+  constructor(d) { this.d = d; }
+  element(el) {
+    const prop = el.getAttribute('property') || '';
+    const d = this.d;
+    if (prop === 'og:title')             el.setAttribute('content', d['og:title']);
+    if (prop === 'og:description')       el.setAttribute('content', d['og:description']);
+    if (prop === 'og:image')             el.setAttribute('content', d['og:image']);
+    if (prop === 'og:image:width')       el.setAttribute('content', d['og:image:width']);
+    if (prop === 'og:image:height')      el.setAttribute('content', d['og:image:height']);
+    if (prop === 'og:image:alt')         el.setAttribute('content', d['og:image:alt']);
+    if (prop === 'og:url')               el.setAttribute('content', d['og:url']);
+    if (prop === 'og:type')              el.setAttribute('content', d['og:type']);
+    if (prop === 'og:site_name')         el.setAttribute('content', d['og:site_name']);
+  }
+}
+
+class CanonicalHandler {
+  constructor(d) { this.d = d; }
+  element(el) { el.setAttribute('href', this.d.canonical); }
+}
+
 async function handleWatchOG(request, filmId, env) {
-  // Fetch film + original page in parallel — env.ASSETS serves Pages static files
   const [film, page] = await Promise.all([
     fetchFilm(filmId).catch(() => null),
     env.ASSETS.fetch(request),
   ]);
 
-  // No film or page error → serve original unchanged
   if (!film || !page.ok) return page;
 
-  const rewriter = new OGRewriter(film);
+  const d = buildOGData(film);
+
   return new HTMLRewriter()
-    .on('title',                     rewriter)
-    .on('meta[name]',                rewriter)
-    .on('meta[property]',            rewriter)
-    .on('link[rel="canonical"]',     rewriter)
+    .on('title',                     new TitleHandler(d))
+    .on('meta[name]',                new MetaNameHandler(d))
+    .on('meta[property]',            new MetaPropHandler(d))
+    .on('link[rel="canonical"]',     new CanonicalHandler(d))
     .transform(page);
 }
 
@@ -273,9 +279,9 @@ async function handleWatchOG(request, filmId, env) {
 // ─────────────────────────────────────────────────────────────
 export default {
   async fetch(request, env, ctx) {
-    const url      = new URL(request.url);
-    const path     = url.pathname;
-    const method   = request.method;
+    const url    = new URL(request.url);
+    const path   = url.pathname;
+    const method = request.method;
 
     // ── Route 1: Sitemap ──────────────────────────────────────
     if (path === '/sitemap.xml' && method === 'GET') {
@@ -288,32 +294,28 @@ export default {
       const filmId = url.searchParams.get('id');
       const ua     = request.headers.get('user-agent') || '';
 
-      // Only intercept crawlers — regular users get page instantly
       if (filmId && isCrawler(ua)) {
         return handleWatchOG(request, filmId, env);
       }
     }
 
     // ── Route 3: Clean slug URLs e.g. /close-range ────────────
-    // Match single-segment paths with no file extension (not /browse.html etc.)
     const isSlugUrl = /^\/[a-z0-9][a-z0-9\-]*[a-z0-9]$/.test(path) && !path.includes('.');
     if (isSlugUrl && method === 'GET') {
-      const slug = path.slice(1); // strip leading /
+      const slug = path.slice(1);
       const ua   = request.headers.get('user-agent') || '';
 
       if (isCrawler(ua)) {
-        // Crawlers: rewrite to watch.html and inject dynamic OG meta by slug
         const watchReq = new Request(`${url.origin}/watch.html${url.search}`, {
-          method: request.method,
+          method:  request.method,
           headers: request.headers,
         });
         return handleWatchOG(watchReq, slug, env);
       }
 
-      // Regular users: serve watch.html transparently (URL stays /close-range)
       return env.ASSETS.fetch(
         new Request(`${url.origin}/watch.html`, {
-          method: request.method,
+          method:  request.method,
           headers: request.headers,
         })
       );
