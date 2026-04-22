@@ -745,7 +745,27 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
 const SUPABASE_URL = localStorage.getItem('cv_url') || 'https://kncqgatjjcezlnwwikqm.supabase.co';
 const SUPABASE_KEY = localStorage.getItem('cv_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuY3FnYXRqamNlemxud3dpa3FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjUxMzMsImV4cCI6MjA5MDY0MTEzM30.irNGQnC6SlSq2ozVHToq1TnBAs_fKdukJMPmaMB1wyc';
 const PLACEHOLDERS = ['placeholder-1','placeholder-2','placeholder-3','placeholder-4'];
-const PAGE_SIZE = 56;
+const ROWS_PER_PAGE = 7; // always show exactly 7 full rows
+
+// Detect how many columns the CSS grid is currently rendering,
+// then return ROWS_PER_PAGE × cols so every page ends on a complete row.
+function getPageSize() {
+  const grid = document.getElementById('filmGrid');
+  if (!grid) return 56; // safe fallback before DOM ready
+  const firstCard = grid.querySelector('.film-card');
+  if (!firstCard) {
+    // Grid not yet populated — derive from computed column template
+    const cols = getComputedStyle(grid)
+      .gridTemplateColumns.split(' ').length;
+    return Math.max(cols, 2) * ROWS_PER_PAGE;
+  }
+  const gridLeft  = grid.getBoundingClientRect().left;
+  const cardLeft  = firstCard.getBoundingClientRect().left;
+  const cardWidth = firstCard.getBoundingClientRect().width;
+  const gridWidth = grid.getBoundingClientRect().width;
+  const cols      = Math.round(gridWidth / cardWidth);
+  return Math.max(cols, 2) * ROWS_PER_PAGE;
+}
 
 // ── DEMO DATA ─────────────────────────────────────────────────
 const DEMO = [
@@ -938,6 +958,7 @@ function filterFilms() {
 }
 
 function renderGrid() {
+  const PAGE_SIZE  = getPageSize();
   const total      = filteredFilms.length;
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const start      = (currentPage - 1) * PAGE_SIZE;
@@ -980,6 +1001,7 @@ function renderPagination(totalPages) {
 }
 
 function goPage(n) {
+  const PAGE_SIZE  = getPageSize();
   const totalPages = Math.ceil(filteredFilms.length / PAGE_SIZE);
   if (n < 1 || n > totalPages) return;
   currentPage = n;
@@ -1092,7 +1114,14 @@ document.addEventListener('click', e => {
   }
 });
 
-// ── INIT ─────────────────────────────────────────────────────
+// Re-render on resize so PAGE_SIZE stays in sync with column count
+let _resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    if (filteredFilms.length) { currentPage = 1; renderGrid(); }
+  }, 200);
+});
 async function init() {
   readURL();
   const skeletonHTML = Array(18).fill(0).map(() => `<div class="skeleton"></div>`).join('');
