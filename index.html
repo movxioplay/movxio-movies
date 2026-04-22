@@ -919,8 +919,8 @@ nav {
 ======================================== */
 .film-grid {
   display: grid;
-  /* 9-10 cards per row on wide screens — auto-fill fills partial last row */
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  /* ~10 cards/row at 1440px, ~11 at 1600px, ~12 at 1920px */
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
   gap: 12px;
 }
 
@@ -2340,25 +2340,27 @@ async function init() {
   document.getElementById('featuredGrid').innerHTML = gridFilms.map((f,i) => filmCard(f,i)).join('');
 
   // Latest row — current year first, then prev year, then older
-  // Auto-pad to fill complete rows (9 cards per row on desktop)
-  const CARDS_PER_ROW = 9;
+  // 8 complete rows of 10 cards = 80 films (matches ~1440px desktop)
+  // At wider screens (1600-1920px) shows 7 rows — still clean
+  const CARDS_PER_ROW = 10;
+  const TARGET_ROWS   = 8;
+  const TARGET_COUNT  = CARDS_PER_ROW * TARGET_ROWS; // 80
   const currentYear = new Date().getFullYear();
   const prevYear = currentYear - 1;
   const latestCurrent = allFilms.filter(f => f.year == currentYear);
   const latestPrev    = allFilms.filter(f => f.year == prevYear);
   const latestOlder   = allFilms.filter(f => f.year != currentYear && f.year != prevYear);
-  // Build ordered list: current → prev → older, up to 90 films max
-  let latestOrdered = [...latestCurrent, ...latestPrev, ...latestOlder].slice(0, 90);
-  // Pad last row: round up to next multiple of CARDS_PER_ROW
+  // Order: current year → prev year → older, cap at 88
+  let latestOrdered = [...latestCurrent, ...latestPrev, ...latestOlder].slice(0, TARGET_COUNT);
+  // Pad last row to fill it completely
   const remainder = latestOrdered.length % CARDS_PER_ROW;
   if (remainder !== 0) {
     const needed = CARDS_PER_ROW - remainder;
-    // Pull extra from older films not already included
     const alreadyIn = new Set(latestOrdered.map(f => f.id));
     const extras = allFilms.filter(f => !alreadyIn.has(f.id)).slice(0, needed);
     latestOrdered = [...latestOrdered, ...extras];
   }
-  document.getElementById('latestRow').innerHTML = (latestOrdered.length ? latestOrdered : allFilms.slice(0, 90)).map((f,i) => filmCard(f,i)).join('');
+  document.getElementById('latestRow').innerHTML = (latestOrdered.length ? latestOrdered : allFilms.slice(0, TARGET_COUNT)).map((f,i) => filmCard(f,i)).join('');
 
   // Inject ItemList JSON-LD so Google can index the film catalogue
   (function injectItemList() {
