@@ -1349,6 +1349,7 @@ let editingId      = null;
 let subtitleCount  = 0;
 let allFilmsCache  = [];
 let editingBannerId = null;
+let allBannersCache = [];
 
 // ── LOGIN ─────────────────────────────────────────────────────
 async function doLogin() {
@@ -1497,7 +1498,7 @@ function renderFilmTable(films) {
         <div class="list-meta"><span class="badge-${f.type === 'series' ? 'series' : 'movie'}">${f.type === 'series' ? '📺 Series' : '🎬 Movie'}</span> · ${f.country || '—'} · ${f.year || '—'} · ${f.imdb_rating ? '⭐'+f.imdb_rating : ''}</div>
       </div>
       <div class="list-actions">
-        <button class="btn-edit" onclick='editFilm(${JSON.stringify(f)})'>Edit</button>
+        <button class="btn-edit" onclick="editFilmById('${f.id}')">Edit</button>
         <button class="btn-delete" onclick="deleteFilm('${f.id}')">Del</button>
       </div>
     </div>`).join('');
@@ -1524,8 +1525,8 @@ function renderFilmTable(films) {
       <td>${f.hls_url ? `<span class="badge-hls">✓ HLS</span>` : `<span class="badge-no-video">No video</span>`}</td>
       <td><span class="badge-status badge-${(f.status||'active').replace('_','-')}">${(f.status||'active').replace('_',' ')}</span></td>
       <td><div style="display:flex;gap:6px;">
-        <button class="btn-edit" onclick='editFilm(${JSON.stringify(f)})'>Edit</button>
-        <button class="btn-dupe" onclick='dupeFilm(${JSON.stringify(f)})' title="Duplicate">⧉</button>
+        <button class="btn-edit" onclick="editFilmById('${f.id}')">Edit</button>
+        <button class="btn-dupe" onclick="dupeFilmById('${f.id}')" title="Duplicate">⧉</button>
         <button class="btn-delete" onclick="deleteFilm('${f.id}')">Del</button>
       </div></td>
     </tr>`).join('');
@@ -1809,6 +1810,16 @@ async function deleteFilm(id) {
   }
 }
 
+// ── SAFE EDIT/DUPE HELPERS (avoid JSON.stringify in onclick attrs) ─────────
+function editFilmById(id) {
+  const film = allFilmsCache.find(f => f.id === id);
+  if (film) editFilm(film);
+}
+function dupeFilmById(id) {
+  const film = allFilmsCache.find(f => f.id === id);
+  if (film) dupeFilm(film);
+}
+
 // ── BANNERS ───────────────────────────────────────────────────
 async function loadBanners() {
   let banners = [];
@@ -1821,6 +1832,7 @@ async function loadBanners() {
 }
 
 function renderBanners(banners) {
+  allBannersCache = banners;
   const list = document.getElementById('banner-list');
   if (!banners.length) {
     list.innerHTML = `<div class="empty-state"><div class="icon">🖼️</div><p>No banners yet. Click "Add Banner" to create your first hero slide.</p></div>`;
@@ -1834,10 +1846,15 @@ function renderBanners(banners) {
         <div class="banner-meta">${b.subtitle || ''} ${b.active ? '· <span style="color:var(--green);">Active</span>' : '· <span style="color:var(--muted);">Inactive</span>'} · Order: ${b.sort_order ?? 0}</div>
       </div>
       <div class="banner-actions">
-        <button class="btn-edit" onclick='editBanner(${JSON.stringify(b)})'>Edit</button>
+        <button class="btn-edit" onclick="editBannerById('${b.id}')">Edit</button>
         <button class="btn-delete" onclick="deleteBanner('${b.id}')">Del</button>
       </div>
     </div>`).join('');
+}
+
+function editBannerById(id) {
+  const banner = allBannersCache.find(b => b.id === id);
+  if (banner) editBanner(banner);
 }
 
 function openBannerForm() {
