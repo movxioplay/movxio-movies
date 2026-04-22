@@ -919,10 +919,14 @@ nav {
 ======================================== */
 .film-grid {
   display: grid;
-  /* ~10 cards/row at 1440px, ~11 at 1600px, ~12 at 1920px */
-  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  /* Fixed 10 columns on desktop — matches the JS TARGET CARDS_PER_ROW=10 padding logic */
+  grid-template-columns: repeat(10, 1fr);
   gap: 12px;
 }
+@media (max-width: 1400px) { .film-grid { grid-template-columns: repeat(8, 1fr); } }
+@media (max-width: 1100px) { .film-grid { grid-template-columns: repeat(6, 1fr); } }
+@media (max-width: 768px)  { .film-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; } }
+@media (max-width: 480px)  { .film-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; } }
 
 .film-card {
   position: relative;
@@ -969,90 +973,129 @@ nav {
   opacity: 0.15;
 }
 
+/* ── Poster overlay: always-visible corner info (RidoMovies style) ── */
 .card-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(8,8,16,0.95) 0%, rgba(8,8,16,0.5) 50%, transparent 100%);
-  opacity: 0;
+  /* Persistent gradients top + bottom for legibility */
+  background:
+    linear-gradient(to bottom, rgba(8,8,16,0.72) 0%, transparent 32%),
+    linear-gradient(to top,    rgba(8,8,16,0.92) 0%, transparent 48%);
+  opacity: 1;
   transition: opacity 0.25s;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  padding: 16px;
-  gap: 10px;
-}
-/* Touch devices — always show bottom overlay so users see the title + play button */
-@media (hover: none) {
-  .card-overlay {
-    opacity: 1;
-    background: linear-gradient(to top, rgba(8,8,16,0.92) 0%, transparent 55%);
-  }
-  .card-play { transform: scale(1); }
+  justify-content: space-between;
+  pointer-events: none;
 }
 
+/* Play button — fades in on hover only */
 .card-play {
-  align-self: center;
-  width: 44px; height: 44px;
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) scale(0.75);
+  width: 42px; height: 42px;
   border-radius: 50%;
   background: var(--accent);
   display: flex; align-items: center; justify-content: center;
-  margin-bottom: 4px;
-  box-shadow: 0 4px 20px rgba(232,71,63,0.5);
-  transform: scale(0.8);
-  transition: transform 0.2s;
+  box-shadow: 0 4px 20px rgba(232,71,63,0.6);
+  opacity: 0;
+  transition: transform 0.2s, opacity 0.2s;
+  pointer-events: none;
 }
-.film-card:hover .card-play { transform: scale(1); }
-.card-play svg { width: 16px; height: 16px; fill: #fff; margin-left: 2px; }
+.film-card:hover .card-play,
+@media (hover: none) { .card-play { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+.film-card:hover .card-play { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.card-play svg { width: 15px; height: 15px; fill: #fff; margin-left: 2px; }
 
+/* ── Top row: rating (left) + badge (right) ── */
+.card-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 7px 7px 0;
+}
+.card-rating-badge {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(8,8,16,0.72);
+  backdrop-filter: blur(6px);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-family: 'Space Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--gold);
+  line-height: 1;
+}
+.card-rating-badge svg { width: 9px; height: 9px; fill: var(--gold); flex-shrink: 0; }
+
+.card-type-badge {
+  font-family: 'Space Mono', monospace;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(8,8,16,0.72);
+  backdrop-filter: blur(6px);
+  border-radius: 4px;
+  padding: 3px 7px;
+  color: rgba(255,255,255,0.85);
+  line-height: 1;
+}
+.card-type-badge.new-badge { background: rgba(232,71,63,0.85); color: #fff; }
+.card-type-badge.featured-badge { background: rgba(61,127,255,0.85); color: #fff; }
+.card-type-badge.hd-badge { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.9); }
+
+/* ── Bottom row: title+year (left) + duration (right) ── */
+.card-bottom-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 7px 7px;
+  gap: 4px;
+}
+.card-bottom-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
 .card-overlay-title {
   font-family: 'Syne', sans-serif;
   font-weight: 700;
-  font-size: 13.5px;
+  font-size: 11.5px;
   line-height: 1.2;
-  color: var(--text);
+  color: #fff;
   letter-spacing: -0.01em;
-}
-.card-overlay-meta {
-  font-family: 'Space Mono', monospace;
-  font-size: 10px;
-  color: var(--text-muted);
-  display: flex;
-  gap: 8px;
-}
-
-/* Always-visible bottom strip */
-.card-info {
-  padding: 12px 12px 14px;
-}
-.card-title {
-  font-family: 'Syne', sans-serif;
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  letter-spacing: -0.01em;
-  margin-bottom: 4px;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.8);
 }
-.card-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.card-overlay-year {
   font-family: 'Space Mono', monospace;
-  font-size: 10px;
-  color: var(--text-muted);
-}
-.card-genre-tag {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 1px 6px;
   font-size: 9px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.55);
+  line-height: 1;
 }
+.card-overlay-dur {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  color: rgba(255,255,255,0.6);
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: rgba(8,8,16,0.6);
+  border-radius: 3px;
+  padding: 2px 5px;
+  line-height: 1.4;
+}
+
+/* Remove old card-info strip (no longer needed) */
+.card-info { display: none; }
+.card-meta  { display: none; }
+.card-title { display: none; }
 
 /* Featured row — slightly wider cards than standard rows */
 .film-row.featured-row .film-card {
@@ -1990,35 +2033,51 @@ function filmCard(film, idx = 0) {
     : `<div class="card-thumb-placeholder ${ph}"><span class="placeholder-icon">🎬</span></div>`;
 
   const year = film.year || '';
-  const genres = (film.genre||'').split(',').map(g=>g.trim()).filter(Boolean);
-  const genreTags = genres.map(g => `<span class="card-genre-tag">${esc(g)}</span>`).join('');
-  const dur = film.duration_secs ? formatDur(film.duration_secs) : '';
+  const dur  = film.duration_secs ? formatDur(film.duration_secs) : '';
+
+  // Top-right badge: NEW > badge text > Featured > HD
+  let typeBadge = '';
+  const isNew = film.badge && film.badge.toLowerCase() === 'new';
+  if (isNew) {
+    typeBadge = `<span class="card-type-badge new-badge">NEW</span>`;
+  } else if (film.badge) {
+    typeBadge = `<span class="card-type-badge featured-badge">${esc(film.badge)}</span>`;
+  } else if (film.featured) {
+    typeBadge = `<span class="card-type-badge featured-badge">Featured</span>`;
+  } else {
+    typeBadge = `<span class="card-type-badge hd-badge">HD</span>`;
+  }
+
+  // Top-left: IMDb rating
+  const ratingBadge = film.imdb_rating
+    ? `<span class="card-rating-badge"><svg viewBox="0 0 10 10"><polygon points="5,1 6.2,3.8 9.5,4.1 7.2,6.2 7.9,9.5 5,7.9 2.1,9.5 2.8,6.2 0.5,4.1 3.8,3.8"/></svg>${film.imdb_rating}</span>`
+    : `<span class="card-rating-badge" style="opacity:0;pointer-events:none;">0</span>`;
 
   const saved = isInWatchlist(film.id);
   return `
   <div class="film-card" onclick="window.location.href='${film.slug ? `/film/${film.slug}` : `watch.html?id=${esc(film.id)}`}'">
-    ${film.badge ? `<div class="card-badge">${esc(film.badge)}</div>` : film.featured ? `<div class="card-badge">Featured</div>` : ''}
     <div class="card-thumb">
       ${thumb}
       <div class="card-overlay">
+        <div class="card-top-row">
+          ${ratingBadge}
+          ${typeBadge}
+        </div>
         <div class="card-play">
           <svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6V2z"/></svg>
         </div>
-        <div class="card-overlay-title">${esc(film.title)}</div>
-        <div class="card-overlay-meta">${year}${dur ? ' · '+dur : ''}</div>
+        <div class="card-bottom-row">
+          <div class="card-bottom-left">
+            <div class="card-overlay-title">${esc(film.title)}</div>
+            ${year ? `<div class="card-overlay-year">${year}</div>` : ''}
+          </div>
+          ${dur ? `<div class="card-overlay-dur">${dur}</div>` : ''}
+        </div>
       </div>
     </div>
-    <button onclick="event.stopPropagation();cardToggleWl(this,'${esc(film.id)}')" title="${saved?'Remove from watchlist':'Add to watchlist'}" style="position:absolute;top:6px;right:6px;z-index:2;width:32px;height:32px;border-radius:50%;background:rgba(8,8,16,0.6);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;transition:opacity 0.2s;" class="card-wl-btn ${saved?'saved':''}">
-      <svg viewBox="0 0 24 24" width="14" style="fill:${saved?'var(--gold)':'none'};stroke:${saved?'var(--gold)':'#fff'};stroke-width:2;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+    <button onclick="event.stopPropagation();cardToggleWl(this,'${esc(film.id)}')" title="${saved?'Remove from watchlist':'Add to watchlist'}" style="position:absolute;top:34px;right:6px;z-index:3;width:28px;height:28px;border-radius:50%;background:rgba(8,8,16,0.65);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;transition:opacity 0.2s;pointer-events:auto;" class="card-wl-btn ${saved?'saved':''}">
+      <svg viewBox="0 0 24 24" width="13" style="fill:${saved?'var(--gold)':'none'};stroke:${saved?'var(--gold)':'#fff'};stroke-width:2;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
     </button>
-    <div class="card-info">
-      <div class="card-title">${esc(film.title)}</div>
-      <div class="card-meta">
-        <span>${year}</span>
-        ${film.imdb_rating ? `<span style="color:var(--gold);">★${film.imdb_rating}</span>` : ''}
-        ${genreTags}
-      </div>
-    </div>
   </div>`;
 }
 
@@ -2341,7 +2400,7 @@ async function init() {
 
   // Latest row — current year first, then prev year, then older
   // 8 complete rows of 10 cards = 80 films (matches ~1440px desktop)
-  // At wider screens (1600-1920px) shows 7 rows — still clean
+  // Padding rounds up to nearest even number to keep smaller grids tidy too
   const CARDS_PER_ROW = 10;
   const TARGET_ROWS   = 8;
   const TARGET_COUNT  = CARDS_PER_ROW * TARGET_ROWS; // 80
@@ -2350,15 +2409,22 @@ async function init() {
   const latestCurrent = allFilms.filter(f => f.year == currentYear);
   const latestPrev    = allFilms.filter(f => f.year == prevYear);
   const latestOlder   = allFilms.filter(f => f.year != currentYear && f.year != prevYear);
-  // Order: current year → prev year → older, cap at 88
+  // Order: current year → prev year → older, cap at TARGET_COUNT
   let latestOrdered = [...latestCurrent, ...latestPrev, ...latestOlder].slice(0, TARGET_COUNT);
-  // Pad last row to fill it completely
+  // Pad last row: ensure count is a multiple of 10 (desktop) — also a multiple of 2,4,6,8
   const remainder = latestOrdered.length % CARDS_PER_ROW;
   if (remainder !== 0) {
     const needed = CARDS_PER_ROW - remainder;
     const alreadyIn = new Set(latestOrdered.map(f => f.id));
     const extras = allFilms.filter(f => !alreadyIn.has(f.id)).slice(0, needed);
-    latestOrdered = [...latestOrdered, ...extras];
+    // If we don't have enough extras to complete the row, pad with dupes from start
+    if (extras.length < needed) {
+      const fillCount = needed - extras.length;
+      const dupes = latestOrdered.slice(0, fillCount);
+      latestOrdered = [...latestOrdered, ...extras, ...dupes];
+    } else {
+      latestOrdered = [...latestOrdered, ...extras];
+    }
   }
   document.getElementById('latestRow').innerHTML = (latestOrdered.length ? latestOrdered : allFilms.slice(0, TARGET_COUNT)).map((f,i) => filmCard(f,i)).join('');
 
