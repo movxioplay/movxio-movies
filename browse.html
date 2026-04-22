@@ -277,16 +277,6 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 }
 @media (max-width: 600px) { .content-area { padding: 12px 10px 80px; } }
 
-/* Results info */
-.results-info {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 14px; min-height: 20px;
-}
-.results-count {
-  font-family: 'Space Mono', monospace; font-size: 10px;
-  letter-spacing: 0.05em; color: var(--text-muted); text-transform: uppercase;
-}
-
 /* ── FILM GRID ── */
 .film-grid {
   display: grid;
@@ -465,6 +455,7 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
   .filter-select { font-size: 12px; }
   .genre-dropdown-btn { font-size: 12px; padding: 7px 11px; }
   .new-week-chip { display: none; }
+  .filter-country { display: none; }
 }
 </style>
 </head>
@@ -637,7 +628,7 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
     </select>
 
     <!-- Country -->
-    <select class="filter-select" id="countryFilter" onchange="filterFilms()" style="display:none;">
+    <select class="filter-select filter-country" id="countryFilter" onchange="filterFilms()">
       <option value="">All Countries</option>
       <option>United States</option><option>United Kingdom</option><option>Canada</option>
       <option>Australia</option><option>France</option><option>Germany</option>
@@ -687,9 +678,6 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
 
 <!-- ── CONTENT ── -->
 <div class="content-area">
-  <div class="results-info">
-    <div class="results-count" id="resultsCount"></div>
-  </div>
   <div class="film-grid" id="filmGrid">
     <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
     <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
@@ -954,9 +942,6 @@ function renderGrid() {
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const start      = (currentPage - 1) * PAGE_SIZE;
   const page       = filteredFilms.slice(start, start + PAGE_SIZE);
-
-  const countEl = document.getElementById('resultsCount');
-  if (countEl) countEl.textContent = total ? `${total.toLocaleString()} film${total !== 1 ? 's' : ''}` : '';
 
   if (!total) {
     document.getElementById('filmGrid').innerHTML = `
