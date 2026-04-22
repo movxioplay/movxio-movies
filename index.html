@@ -912,7 +912,7 @@ nav {
 ======================================== */
 .film-grid {
   display: grid;
-  /* Fixed 10 columns on desktop — matches the JS TARGET CARDS_PER_ROW=10 padding logic */
+  /* Column counts are CSS-driven — JS reads these via DOM measurement to pad last row flush */
   grid-template-columns: repeat(10, 1fr);
   gap: 12px;
 }
@@ -2046,7 +2046,7 @@ function filmCard(film, idx = 0) {
 
   const saved = isInWatchlist(film.id);
   return `
-  <div class="film-card" onclick="window.location.href='${film.slug ? `/film/${esc(film.slug)}` : `watch.html?id=${esc(film.id)}`}'">
+  <div class="film-card" data-id="${esc(String(film.id))}" onclick="window.location.href='${film.slug ? `/film/${esc(film.slug)}` : `watch.html?id=${esc(film.id)}`}'">
     <div class="card-thumb">
       ${thumb}
       <div class="card-overlay">
@@ -2390,35 +2390,70 @@ async function init() {
   const gridFilms = featuredFilms.length >= 2 ? featuredFilms : allFilms.slice(0, 12);
   document.getElementById('featuredGrid').innerHTML = gridFilms.map((f,i) => filmCard(f,i)).join('');
 
-  // Latest row — current year first, then prev year, then older
-  // 8 complete rows of 10 cards = 80 films (matches ~1440px desktop)
-  // Padding rounds up to nearest even number to keep smaller grids tidy too
-  const CARDS_PER_ROW = 10;
-  const TARGET_ROWS   = 8;
-  const TARGET_COUNT  = CARDS_PER_ROW * TARGET_ROWS; // 80
+  // ── Latest Additions — dynamic row-fill ────────────────────────────────
+  // 1. Build ordered pool: current year → prev year → older (up to 120 films)
   const currentYear = new Date().getFullYear();
-  const prevYear = currentYear - 1;
-  const latestCurrent = allFilms.filter(f => f.year == currentYear);
-  const latestPrev    = allFilms.filter(f => f.year == prevYear);
-  const latestOlder   = allFilms.filter(f => f.year != currentYear && f.year != prevYear);
-  // Order: current year → prev year → older, cap at TARGET_COUNT
-  let latestOrdered = [...latestCurrent, ...latestPrev, ...latestOlder].slice(0, TARGET_COUNT);
-  // Pad last row: ensure count is a multiple of 10 (desktop) — also a multiple of 2,4,6,8
-  const remainder = latestOrdered.length % CARDS_PER_ROW;
-  if (remainder !== 0) {
-    const needed = CARDS_PER_ROW - remainder;
-    const alreadyIn = new Set(latestOrdered.map(f => f.id));
-    const extras = allFilms.filter(f => !alreadyIn.has(f.id)).slice(0, needed);
-    // If we don't have enough extras to complete the row, pad with dupes from start
-    if (extras.length < needed) {
-      const fillCount = needed - extras.length;
-      const dupes = latestOrdered.slice(0, fillCount);
-      latestOrdered = [...latestOrdered, ...extras, ...dupes];
-    } else {
-      latestOrdered = [...latestOrdered, ...extras];
+  const prevYear    = currentYear - 1;
+  const latestPool  = [
+    ...allFilms.filter(f => f.year == currentYear),
+    ...allFilms.filter(f => f.year == prevYear),
+    ...allFilms.filter(f => f.year != currentYear && f.year != prevYear)
+  ].slice(0, 120);
+
+  // 2. Render an initial batch (enough for ~10 rows at any breakpoint)
+  const INITIAL_BATCH = 80;
+  const grid = document.getElementById('latestRow');
+  grid.innerHTML = latestPool.slice(0, INITIAL_BATCH).map((f, i) => filmCard(f, i)).join('');
+
+  // 3. After paint: measure actual column count from DOM, pad to complete last row
+  function padLatestGrid() {
+    const cards = grid.querySelectorAll('.film-card');
+    if (!cards.length) return;
+
+    // Detect columns by counting how many cards share the same offsetTop as the first card
+    const firstTop = cards[0].getBoundingClientRect().top;
+    let cols = 0;
+    for (const card of cards) {
+      if (Math.abs(card.getBoundingClientRect().top - firstTop) < 8) cols++;
+      else break;
     }
+    if (!cols || cols < 2) return; // safety — layout not ready yet
+
+    const currentCount = cards.length;
+    const remainder    = currentCount % cols;
+    if (remainder === 0) return; // already flush — nothing to do
+
+    const needed    = cols - remainder;
+    const alreadyIn = new Set(Array.from(cards).map(c => c.dataset.id).filter(Boolean));
+
+    // Pull extras from pool (never already shown), then wrap from start if needed
+    let extras = latestPool.filter(f => !alreadyIn.has(String(f.id))).slice(0, needed);
+    if (extras.length < needed) {
+      // Not enough unseen films — wrap from start of pool
+      extras = [...extras, ...latestPool.slice(0, needed - extras.length)];
+    }
+
+    grid.insertAdjacentHTML('beforeend', extras.map((f, i) => filmCard(f, currentCount + i)).join(''));
   }
-  document.getElementById('latestRow').innerHTML = (latestOrdered.length ? latestOrdered : allFilms.slice(0, TARGET_COUNT)).map((f,i) => filmCard(f,i)).join('');
+
+  // 4. Run after first paint
+  requestAnimationFrame(() => requestAnimationFrame(padLatestGrid));
+
+  // 5. Re-pad on resize (column count changes at breakpoints)
+  if (window._latestGridRO) window._latestGridRO.disconnect();
+  let _padTimer;
+  window._latestGridRO = new ResizeObserver(() => {
+    clearTimeout(_padTimer);
+    _padTimer = setTimeout(() => {
+      // Strip any previously added padding cards, then re-pad cleanly
+      const allCards  = grid.querySelectorAll('.film-card');
+      const baseCount = Math.min(INITIAL_BATCH, allCards.length);
+      // Remove extra pad cards beyond initial batch
+      Array.from(allCards).slice(baseCount).forEach(c => c.remove());
+      padLatestGrid();
+    }, 120);
+  });
+  window._latestGridRO.observe(grid);
 
   // Inject ItemList JSON-LD so Google can index the film catalogue
   (function injectItemList() {
@@ -2487,11 +2522,7 @@ function renderHero(film) {
     crEl.textContent = film.content_rating;
   } else { crEl.style.display = 'none'; }
 
-  // Backdrop (legacy — not used in full-bleed layout)
-  if (film.thumbnail_url) {
-    const bgImg = document.getElementById('heroBgImg');
-    if (bgImg) bgImg.src = film.thumbnail_url;
-  }
+  // Backdrop image (legacy element removed — full-bleed layout uses trailerPoster directly)
 
   // RIGHT PANEL — trailer or poster
   const trailerWrap   = document.getElementById('heroTrailerWrap');
@@ -2687,6 +2718,7 @@ function renderDemoState() {
       <a href="admin.html" style="display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;padding:10px 22px;border-radius:6px;font-weight:600;font-size:13px;">Open Admin Panel</a>
     </div>`;
   document.getElementById('latestRow').innerHTML = '';
+  if (window._latestGridRO) { window._latestGridRO.disconnect(); window._latestGridRO = null; }
 }
 
 // ── TRAILER MODAL ────────────────────────────────────────────
