@@ -672,6 +672,17 @@ nav {
   margin: 0 !important;
   overflow: hidden;
 }
+.hero-poster-only::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to top, rgba(8,8,16,1) 0%, rgba(8,8,16,0.85) 22%, rgba(8,8,16,0.3) 45%, transparent 65%),
+    linear-gradient(to right, rgba(8,8,16,0.7) 0%, rgba(8,8,16,0.3) 35%, transparent 60%),
+    linear-gradient(to bottom, rgba(8,8,16,0.5) 0%, transparent 15%);
+  pointer-events: none;
+  z-index: 1;
+}
 .hero-poster-only img {
   width: 100%; height: 100%;
   object-fit: cover;
@@ -808,8 +819,8 @@ nav {
    SECTION HEADER
 ======================================== */
 .section {
-  padding: 60px 32px 40px;
-  max-width: 1400px;
+  padding: 56px 24px 36px;
+  max-width: 1800px;
   margin: 0 auto;
 }
 
@@ -862,7 +873,7 @@ nav {
    GENRE PILLS
 ======================================== */
 .genre-strip {
-  padding: 0 32px;
+  padding: 0 24px;
   margin-bottom: 48px;
   overflow-x: auto;
   scrollbar-width: none;
@@ -908,8 +919,9 @@ nav {
 ======================================== */
 .film-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
+  /* 9-10 cards per row on wide screens — auto-fill fills partial last row */
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 12px;
 }
 
 .film-card {
@@ -1042,12 +1054,12 @@ nav {
   letter-spacing: 0.08em;
 }
 
-/* Featured row — wider cards than standard rows */
+/* Featured row — slightly wider cards than standard rows */
 .film-row.featured-row .film-card {
-  width: 220px;
+  width: 180px;
 }
 @media (max-width: 480px) {
-  .film-row.featured-row .film-card { width: 170px; }
+  .film-row.featured-row .film-card { width: 145px; }
 }
 
 /* ========================================
@@ -1056,9 +1068,9 @@ nav {
 /* ── Horizontal scroll row ── */
 .film-row-outer {
   position: relative;
-  max-width: 1400px;
+  max-width: 1800px;
   margin: 0 auto;
-  padding: 0 32px 8px;
+  padding: 0 24px 8px;
 }
 .film-row-wrap {
   overflow-x: auto;
@@ -1070,11 +1082,11 @@ nav {
 .film-row-wrap::-webkit-scrollbar { display: none; }
 .film-row {
   display: flex;
-  gap: 14px;
+  gap: 10px;
   width: max-content;
 }
 .film-row .film-card {
-  width: 180px;
+  width: 150px;
   flex-shrink: 0;
 }
 /* Arrow buttons — desktop hover only */
@@ -1102,7 +1114,7 @@ nav {
 .row-arrow.right { right: 0; }
 .film-row-outer:hover .row-arrow { opacity: 1; }
 @media (max-width: 768px) { .row-arrow { display: none; } }
-@media (max-width: 480px) { .film-row .film-card { width: 140px; } }
+@media (max-width: 480px) { .film-row .film-card { width: 120px; } }
 
 /* ========================================
    STATS BAR
@@ -1154,7 +1166,7 @@ footer {
 }
 
 .footer-inner {
-  max-width: 1400px;
+  max-width: 1800px;
   margin: 0 auto;
   display: flex;
   align-items: flex-start;
@@ -1206,7 +1218,7 @@ footer {
 .footer-col ul li a:hover { color: var(--text); }
 
 .footer-bottom {
-  max-width: 1400px;
+  max-width: 1800px;
   margin: 32px auto 0;
   padding-top: 24px;
   border-top: 1px solid var(--border);
@@ -1287,25 +1299,25 @@ footer {
   .hamburger { display: flex; }
   .btn-nav { display: none; }
 
-  .hero { padding: 100px 20px 60px; min-height: auto; }
+  .hero { padding: 0; }
   .hero-title { font-size: clamp(20px, 5.5vw, 30px); }
   .scroll-hint { display: none; }
   .hero-desc { font-size: 14px; }
 
-  .section { padding: 40px 20px 24px; }
-  .genre-strip { padding: 0 20px; }
-  footer { padding: 40px 20px 24px; }
+  .section { padding: 40px 16px 24px; }
+  .genre-strip { padding: 0 16px; }
+  footer { padding: 40px 16px 24px; }
   .footer-inner { flex-direction: column; gap: 24px; }
   .footer-links { gap: 28px; }
 
-  .film-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .film-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
   .section-title { font-size: 17px; }
 }
 
 @media (max-width: 480px) {
   .btn-watch, .btn-info { justify-content: center; padding: 14px 20px; }
   .hero-meta { font-size: 12px; gap: 8px; }
-  .film-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .film-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
   .genre-pill { padding: 8px 12px; font-size: 12px; }
   .section-header { flex-wrap: wrap; gap: 8px; }
   .footer-links { flex-direction: column; gap: 20px; }
@@ -1996,7 +2008,7 @@ function filmCard(film, idx = 0) {
         <div class="card-overlay-meta">${year}${dur ? ' · '+dur : ''}</div>
       </div>
     </div>
-    <button onclick="event.stopPropagation();cardToggleWl(this,'${esc(film.id)}')" title="${saved?'Remove from watchlist':'Add to watchlist'}" style="position:absolute;top:6px;right:6px;z-index:2;width:36px;height:36px;min-width:44px;min-height:44px;border-radius:50%;background:rgba(8,8,16,0.6);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;transition:opacity 0.2s;" class="card-wl-btn ${saved?'saved':''}">
+    <button onclick="event.stopPropagation();cardToggleWl(this,'${esc(film.id)}')" title="${saved?'Remove from watchlist':'Add to watchlist'}" style="position:absolute;top:6px;right:6px;z-index:2;width:32px;height:32px;border-radius:50%;background:rgba(8,8,16,0.6);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;transition:opacity 0.2s;" class="card-wl-btn ${saved?'saved':''}">
       <svg viewBox="0 0 24 24" width="14" style="fill:${saved?'var(--gold)':'none'};stroke:${saved?'var(--gold)':'#fff'};stroke-width:2;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
     </button>
     <div class="card-info">
@@ -2049,7 +2061,7 @@ function updateHeroWlBtn(saved) {
   const btn = document.getElementById('heroWlBtn');
   const txt = document.getElementById('heroWlText');
   if (!btn) return;
-  btn.style.color = saved ? 'var(--gold)' : 'var(--text-dim)';
+  btn.style.color = saved ? 'var(--gold)' : '#fff';
   btn.style.borderColor = saved ? 'rgba(232,184,75,0.4)' : 'rgba(255,255,255,0.1)';
   btn.style.background = saved ? 'rgba(232,184,75,0.08)' : 'transparent';
   txt.textContent = saved ? 'Saved ✓' : 'Watchlist';
@@ -2266,7 +2278,7 @@ function toggleHeroMute() {
 function scrollRow(btn, dir) {
   var outer = btn.closest('.film-row-outer');
   var wrap  = outer.querySelector('.film-row-wrap');
-  wrap.scrollBy({ left: dir * 620, behavior: 'smooth' });
+  wrap.scrollBy({ left: dir * 1400, behavior: 'smooth' });
 }
 
 async function init() {
@@ -2327,14 +2339,26 @@ async function init() {
   const gridFilms = featuredFilms.length >= 2 ? featuredFilms : allFilms.slice(0, 12);
   document.getElementById('featuredGrid').innerHTML = gridFilms.map((f,i) => filmCard(f,i)).join('');
 
-  // Latest row — show 2026 first, fill to 18 with 2025, then older
+  // Latest row — current year first, then prev year, then older
+  // Auto-pad to fill complete rows (9 cards per row on desktop)
+  const CARDS_PER_ROW = 9;
   const currentYear = new Date().getFullYear();
   const prevYear = currentYear - 1;
   const latestCurrent = allFilms.filter(f => f.year == currentYear);
   const latestPrev    = allFilms.filter(f => f.year == prevYear);
   const latestOlder   = allFilms.filter(f => f.year != currentYear && f.year != prevYear);
-  const latestFilms   = [...latestCurrent, ...latestPrev, ...latestOlder].slice(0, 30);
-  document.getElementById('latestRow').innerHTML = (latestFilms.length ? latestFilms : allFilms.slice(0, 30)).map((f,i) => filmCard(f,i)).join('');
+  // Build ordered list: current → prev → older, up to 90 films max
+  let latestOrdered = [...latestCurrent, ...latestPrev, ...latestOlder].slice(0, 90);
+  // Pad last row: round up to next multiple of CARDS_PER_ROW
+  const remainder = latestOrdered.length % CARDS_PER_ROW;
+  if (remainder !== 0) {
+    const needed = CARDS_PER_ROW - remainder;
+    // Pull extra from older films not already included
+    const alreadyIn = new Set(latestOrdered.map(f => f.id));
+    const extras = allFilms.filter(f => !alreadyIn.has(f.id)).slice(0, needed);
+    latestOrdered = [...latestOrdered, ...extras];
+  }
+  document.getElementById('latestRow').innerHTML = (latestOrdered.length ? latestOrdered : allFilms.slice(0, 90)).map((f,i) => filmCard(f,i)).join('');
 
   // Inject ItemList JSON-LD so Google can index the film catalogue
   (function injectItemList() {
