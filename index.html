@@ -88,7 +88,7 @@
       "@type": "SearchAction",
       "target": {
         "@type": "EntryPoint",
-        "urlTemplate": "https://movxio.com/browse.html?q={search_term_string}"
+        "urlTemplate": "https://movxio.com/search.html?q={search_term_string}"
       },
       "query-input": "required name=search_term_string"
     }
@@ -807,13 +807,6 @@ nav {
   .hero-sk-title { height: 32px; }
 }
 
-/* ── YouTube trailer iframe ── */
-#heroYTContainer iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-  border-radius: 12px;
-}
 
 /* ========================================
    SECTION HEADER
@@ -937,7 +930,7 @@ nav {
   background: var(--surface);
 }
 .film-card:hover { transform: translateY(-4px); }
-.film-card:hover .card-overlay { opacity: 1; }
+/* .card-overlay is always opacity:1 (corner-badge layout) — hover rule removed */
 .card-badge { position: absolute; top: 8px; left: 8px; background: var(--accent); color: #fff; font-family: 'Space Mono', monospace; font-size: 8px; font-weight: 700; padding: 3px 8px; border-radius: 3px; letter-spacing: 0.08em; text-transform: uppercase; z-index: 2; }
 .film-card:hover .card-thumb img { transform: scale(1.06); }
 .film-card:hover .card-wl-btn { opacity: 1 !important; }
@@ -1001,11 +994,11 @@ nav {
   box-shadow: 0 4px 20px rgba(232,71,63,0.6);
   opacity: 0;
   transition: transform 0.2s, opacity 0.2s;
-  pointer-events: none;
+  pointer-events: none; /* card-thumb handles the click via .film-card onclick */
 }
-.film-card:hover .card-play,
-@media (hover: none) { .card-play { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 .film-card:hover .card-play { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+/* Touch devices: always show play button */
+@media (hover: none) { .card-play { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 .card-play svg { width: 15px; height: 15px; fill: #fff; margin-left: 2px; }
 
 /* ── Top row: rating (left) + badge (right) ── */
@@ -1353,14 +1346,12 @@ footer {
   .footer-inner { flex-direction: column; gap: 24px; }
   .footer-links { gap: 28px; }
 
-  .film-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
   .section-title { font-size: 17px; }
 }
 
 @media (max-width: 480px) {
   .btn-watch, .btn-info { justify-content: center; padding: 14px 20px; }
   .hero-meta { font-size: 12px; gap: 8px; }
-  .film-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; }
   .genre-pill { padding: 8px 12px; font-size: 12px; }
   .section-header { flex-wrap: wrap; gap: 8px; }
   .footer-links { flex-direction: column; gap: 20px; }
@@ -1670,7 +1661,7 @@ footer {
       <img class="hero-trailer-poster" id="heroTrailerPoster" alt="" src="">
 
       <!-- Self-hosted mp4 video -->
-      <video id="heroTrailerVideo" muted playsinline loop preload="auto"></video>
+      <video id="heroTrailerVideo" muted playsinline loop preload="auto" aria-label="Film trailer"></video>
 
       <!-- YouTube embed container (injected by JS) -->
       <div id="heroYTContainer" style="display:none;position:absolute;inset:0;z-index:2;pointer-events:none;"></div>
@@ -1723,8 +1714,8 @@ footer {
           </a>
           <div class="hero-secondary-btns">
             <button class="btn-info" id="heroMoreInfoBtn" onclick="openMoreInfo()">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16" stroke-linecap="round" stroke-width="3"/></svg>
-              More Info
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Trailer
             </button>
             <button id="heroWlBtn" onclick="toggleHeroWatchlist()" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;background:rgba(255,255,255,0.1);color:#fff;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;padding:13px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.18);cursor:pointer;transition:all 0.2s;backdrop-filter:blur(8px);">
               <svg id="heroWlIcon" viewBox="0 0 24 24" width="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
@@ -2055,7 +2046,7 @@ function filmCard(film, idx = 0) {
 
   const saved = isInWatchlist(film.id);
   return `
-  <div class="film-card" onclick="window.location.href='${film.slug ? `/film/${film.slug}` : `watch.html?id=${esc(film.id)}`}'">
+  <div class="film-card" onclick="window.location.href='${film.slug ? `/film/${esc(film.slug)}` : `watch.html?id=${esc(film.id)}`}'">
     <div class="card-thumb">
       ${thumb}
       <div class="card-overlay">
@@ -2347,8 +2338,9 @@ async function init() {
   }
 
   // ── Fetch all films — select only fields needed for cards/hero (skips heavy fields) ──
+  // limit=200 cap prevents unbounded fetches as catalogue grows; increase if needed
   const browseFields = 'id,title,year,genre,thumbnail_url,imdb_rating,badge,views,country,duration_secs,language,featured,created_at,status,trailer_url,description,content_rating';
-  allFilms = await sbFetch('films', `select=${browseFields}&order=created_at.desc`);
+  allFilms = await sbFetch('films', `select=${browseFields}&order=created_at.desc&limit=200`);
 
   if (!allFilms.length) { renderDemoState(); return; }
 
@@ -2464,16 +2456,22 @@ function renderHero(film) {
 
   document.getElementById('heroTitle').textContent = film.title;
   document.getElementById('heroYear').textContent = film.year || '';
-  document.getElementById('heroLang').textContent = film.language || 'English';
   document.getElementById('heroGenreTag').textContent = (film.genre||'').split(',').slice(0,2).map(g=>g.trim()).join(' · ');
   document.getElementById('heroDesc').textContent = film.description ? film.description.slice(0, 200) : '';
   document.getElementById('heroWatchBtn').href = film._watchLink || (film.slug ? `/film/${film.slug}` : `watch.html?id=${film.id}`);
 
   if (film.duration_secs) {
     document.getElementById('heroDuration').textContent = formatDur(film.duration_secs);
+    document.getElementById('heroMetaDot1').style.display = '';
   } else {
     document.getElementById('heroDuration').textContent = '';
+    document.getElementById('heroMetaDot1').style.display = 'none';
   }
+
+  // Language dot — only show dot2 when something precedes it (duration shown)
+  const lang = film.language || 'English';
+  document.getElementById('heroLang').textContent = lang;
+  document.getElementById('heroMetaDot2').style.display = film.duration_secs ? '' : 'none';
 
   // IMDb
   const imdbEl = document.getElementById('heroImdb');
@@ -2504,8 +2502,11 @@ function renderHero(film) {
   const ytContainer   = document.getElementById('heroYTContainer');
   const mutedBadge    = document.getElementById('heroMutedBadge');
 
-  if (film.thumbnail_url && posterImg) posterImg.src = film.thumbnail_url;
-  if (film.thumbnail_url && trailerPoster) trailerPoster.src = film.thumbnail_url;
+  if (film.thumbnail_url && posterImg) { posterImg.src = film.thumbnail_url; posterImg.alt = esc(film.title) + ' — poster'; }
+  if (film.thumbnail_url && trailerPoster) { trailerPoster.src = film.thumbnail_url; trailerPoster.alt = esc(film.title) + ' — poster'; }
+
+  // Update video accessible label
+  if (video) video.setAttribute('aria-label', (film.title || 'Film') + ' — trailer');
 
   // Stop any existing mp4 video
   if (video) {
@@ -2515,8 +2516,13 @@ function renderHero(film) {
     video.muted = true;
     video.style.display = 'none';
   }
-  // Clear any existing YouTube iframe
-  if (ytContainer) { ytContainer.innerHTML = ''; ytContainer.style.display = 'none'; }
+  // Clear any existing YouTube iframe and stale postMessage listener
+  if (ytContainer) {
+    ytContainer.innerHTML = '';
+    ytContainer.style.display = 'none';
+    // Remove any outstanding YT play-state listener from previous slide
+    if (window._mvxYTCleanup) { window._mvxYTCleanup(); window._mvxYTCleanup = null; }
+  }
   if (trailerPoster) trailerPoster.classList.remove('hidden');
   if (mutedBadge)   mutedBadge.style.display = 'none';
 
@@ -2531,24 +2537,48 @@ function renderHero(film) {
     posterOnly.style.display  = 'none';
     if (video) video.style.display = 'none';
 
-    // Build autoplay muted YouTube embed
+    // Build autoplay muted YouTube embed — enable JS API for play-state detection
     var iframe = document.createElement('iframe');
     iframe.setAttribute('allowfullscreen', '');
     iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
-    // autoplay=1, mute=1 (required for autoplay), loop=1, playlist=ytId (needed for loop)
-    // rel=0 = no related videos, modestbranding=1, controls=1
-    iframe.src = `https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&rel=0&modestbranding=1&controls=1&playsinline=1`;
+    // enablejsapi=1 allows postMessage play-state events so we can fade poster when video actually starts
+    iframe.src = `https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&rel=0&modestbranding=1&controls=1&playsinline=1&enablejsapi=1`;
     iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none;z-index:2;transform:scale(1.08);';
     iframe.title = (film.title || 'Trailer') + ' — Official Trailer';
 
-    // Show poster until iframe signals it's ready, then fade it out
-    if (trailerPoster) trailerPoster.classList.remove('hidden');
-    iframe.onload = function() {
-      // Give YouTube a moment to start, then fade poster
-      setTimeout(function() {
-        if (trailerPoster) trailerPoster.classList.add('hidden');
-      }, 1800);
+    // Listen for YouTube postMessage play state (state=1 = playing) to fade poster
+    // This is more reliable than onload + setTimeout which shows a black frame
+    var _ytPosterHidden = false;
+    function _onYTMessage(e) {
+      if (_ytPosterHidden) return;
+      try {
+        var data = (typeof e.data === 'string') ? JSON.parse(e.data) : e.data;
+        if (data && data.event === 'infoDelivery' && data.info && data.info.playerState === 1) {
+          _ytPosterHidden = true;
+          window.removeEventListener('message', _onYTMessage);
+          if (trailerPoster) trailerPoster.classList.add('hidden');
+        }
+      } catch(err) {}
+    }
+    window.addEventListener('message', _onYTMessage);
+    // Register cleanup so advancing to next slide removes this listener
+    window._mvxYTCleanup = function() {
+      window.removeEventListener('message', _onYTMessage);
+      _ytPosterHidden = true;
     };
+    // Fallback: if postMessage never fires (e.g. blocked by browser), fade after 4s
+    iframe.onload = function() {
+      setTimeout(function() {
+        if (!_ytPosterHidden) {
+          _ytPosterHidden = true;
+          window.removeEventListener('message', _onYTMessage);
+          if (trailerPoster) trailerPoster.classList.add('hidden');
+        }
+      }, 4000);
+    };
+
+    // Show poster until video actually starts
+    if (trailerPoster) trailerPoster.classList.remove('hidden');
 
     ytContainer.style.display = 'block';
     ytContainer.appendChild(iframe);
@@ -2610,49 +2640,24 @@ function renderContinueWatching(films) {
 
   const cwFilms = inProgress.slice(0, 20);
   document.getElementById('continueSection').style.display = 'block';
+
+  // Build cards using the shared filmCard() function, then inject progress bar
   document.getElementById('continueRow').innerHTML = cwFilms.map(function(f, i) {
     var pct = f._cwDur ? Math.min(100, Math.round((f._cwPos / f._cwDur) * 100)) : 0;
-    var ph  = ['placeholder-1','placeholder-2','placeholder-3','placeholder-4'][i % 4];
-    var thumb = f.thumbnail_url
-      ? '<img src="' + esc(f.thumbnail_url) + '" alt="' + esc(f.title) + '" loading="lazy" style="width:100%;aspect-ratio:2/3;object-fit:cover;display:block;">'
-      : '<div class="card-thumb-placeholder ' + ph + '"><span class="placeholder-icon">&#127916;</span></div>';
-    var genres   = (f.genre||'').split(',').map(function(g){ return g.trim(); }).filter(Boolean);
-    var genreTags = genres.slice(0,3).map(function(g){ return '<span class="card-genre-tag">' + esc(g) + '</span>'; }).join('');
-    var saved    = isInWatchlist(f.id);
-    var wlFill   = saved ? 'var(--gold)' : 'none';
-    var wlStroke = saved ? 'var(--gold)' : '#fff';
-    var wlClass  = 'card-wl-btn' + (saved ? ' saved' : '');
-    var wlTitle  = saved ? 'Remove from watchlist' : 'Add to watchlist';
-    return ''
-      + '<div class="film-card" onclick="window.location.href=\x27' + (f.slug ? '/film/' + f.slug : 'watch.html?id=' + esc(f.id)) + '\x27">'
-      + (f.badge ? '<div class="card-badge">' + esc(f.badge) + '</div>' : (f.featured ? '<div class="card-badge">Featured</div>' : ''))
-      + '<div class="card-thumb">'
-      + thumb
-      + '<div class="card-overlay">'
-      + '<div class="card-play"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6V2z"/></svg></div>'
-      + '<div class="card-overlay-title">' + esc(f.title) + '</div>'
-      + '<div class="card-overlay-meta">' + (f.year||'') + '</div>'
-      + '</div>'
-      + '<div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.12);z-index:3;">'
+    // filmCard() returns a full card div string — wrap it in a relative container
+    // and inject the progress bar before the closing </div>
+    var card = filmCard(f, i);
+    // Insert progress bar just before the closing tag of the outermost div
+    var progressBar = '<div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.12);z-index:4;">'
       + '<div style="width:' + pct + '%;height:100%;background:var(--accent);border-radius:2px;"></div>'
-      + '</div>'
-      + '</div>'
-      + '<button onclick="event.stopPropagation();cardToggleWl(this,\x27' + esc(f.id) + '\x27)" title="' + wlTitle + '" class="' + wlClass + '" style="position:absolute;top:8px;right:8px;z-index:2;width:30px;height:30px;border-radius:50%;background:rgba(8,8,16,0.6);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:0;transition:opacity 0.2s;">'
-      + '<svg viewBox="0 0 24 24" width="14" style="fill:' + wlFill + ';stroke:' + wlStroke + ';stroke-width:2;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>'
-      + '</button>'
-      + '<div class="card-info">'
-      + '<div class="card-title">' + esc(f.title) + '</div>'
-      + '<div class="card-meta">'
-      + '<span>' + (f.year||'') + '</span>'
-      + (f.imdb_rating ? '<span style="color:var(--gold);">&#9733;' + f.imdb_rating + '</span>' : '')
-      + genreTags
-      + '</div></div></div>';
+      + '</div>';
+    return card.replace(/(<\/div>)\s*$/, progressBar + '$1');
   }).join('');
 }
 function filterGenre(btn, genre) {
   document.querySelectorAll('.genre-pill').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
-  window.location.href = 'browse.html';
+  window.location.href = 'browse.html?genre=' + encodeURIComponent(genre);
 }
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -2790,10 +2795,10 @@ function closeTrailer() {
   wrap.querySelectorAll('video').forEach(el => { el.pause(); el.remove(); });
   wrap.querySelectorAll('.trailer-no-video').forEach(el => el.remove());
 
-  // Restore More Info button
+  // Restore Trailer button
   const moreBtn = document.getElementById('heroMoreInfoBtn');
   if (moreBtn) {
-    moreBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16" stroke-linecap="round" stroke-width="3"/></svg> More Info`;
+    moreBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Trailer`;
   }
 
   modal.classList.remove('open');
@@ -2834,9 +2839,11 @@ init();
   </a>
 </nav>
 <style>
-@media (min-width: 768px) { .bottom-nav-bar { display: none !important; } body { padding-bottom: 0 !important; } }
+@media (min-width: 768px) { .bottom-nav-bar { display: none !important; } }
 /* On mobile: pad for bottom nav (64px) + Adsterra social bar (~56px) + iOS safe area */
-body { padding-bottom: 120px; padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 767px) {
+  body { padding-bottom: 120px; padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px)); }
+}
 </style>
 
 
@@ -2916,6 +2923,7 @@ document.addEventListener('keydown', e => {
   // Fire on first meaningful click only
   // Small delay so popunder opens behind the navigation, not in front of it
   document.addEventListener('click', function handler(e) {
+    if (e.target.closest('.card-wl-btn')) return; // don't fire on bookmark clicks
     const target = e.target.closest('a[href*="watch"], .film-card, .btn-watch, .card-play, .card-overlay');
     if (!target) return;
     document.removeEventListener('click', handler);
