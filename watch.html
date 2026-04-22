@@ -1533,6 +1533,19 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
 
     <!-- No video state -->
     <div id="noVideo">
+
+    <!-- ── DevTools Warning Overlay ── -->
+    <div id="devtoolsWarning">
+      <div class="dtw-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+      <div class="dtw-title">Playback Paused</div>
+      <div class="dtw-sub">Close developer tools<br>to resume watching</div>
+    </div>
       <div style="position:relative;display:flex;align-items:center;justify-content:center;">
         <div style="position:absolute;width:96px;height:96px;border-radius:50%;background:rgba(232,71,63,0.08);animation:noVideoPulse 2.4s ease-in-out infinite;"></div>
         <div style="position:absolute;width:76px;height:76px;border-radius:50%;background:rgba(232,71,63,0.12);animation:noVideoPulse 2.4s ease-in-out 0.4s infinite;"></div>
@@ -4206,6 +4219,159 @@ async function submitReport() {
       firePopunder();
     }
   }, 15000);
+
+})();
+</script>
+
+<!-- ══ DEVTOOLS DETECTION — pause player + show warning ══ -->
+<style>
+#devtoolsWarning {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  background: #06060f;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  padding: 32px;
+  pointer-events: none;
+}
+#devtoolsWarning.show {
+  display: flex;
+  pointer-events: auto;
+}
+.dtw-icon {
+  width: 72px; height: 72px;
+  background: rgba(232,71,63,0.12);
+  border: 1px solid rgba(232,71,63,0.3);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  animation: dtw-pulse 2s ease-in-out infinite;
+}
+@keyframes dtw-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(232,71,63,0.25); }
+  50%      { box-shadow: 0 0 0 16px rgba(232,71,63,0); }
+}
+.dtw-icon svg { width: 36px; height: 36px; color: #e8473f; }
+.dtw-title {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: clamp(16px, 3vw, 22px);
+  color: #f0eee8; letter-spacing: -0.02em;
+}
+.dtw-sub {
+  font-family: 'Space Mono', monospace; font-size: 11px;
+  color: #6b6980; letter-spacing: 0.06em;
+  max-width: 320px; line-height: 1.7;
+  text-transform: uppercase;
+}
+</style>
+
+<script>
+(function() {
+  'use strict';
+
+  var _dtOpen    = false;   // current DevTools state
+  var _dtOverlay = null;    // cached overlay element
+  var _checkInterval = null;
+
+  // ── Method 1: window outer vs inner size threshold ──────────
+  // DevTools docked steals ~200px+ from window dimensions
+  var SIZE_THRESHOLD = 160;
+
+  function sizeCheck() {
+    return (
+      window.outerWidth  - window.innerWidth  > SIZE_THRESHOLD ||
+      window.outerHeight - window.innerHeight > SIZE_THRESHOLD
+    );
+  }
+
+  // ── Method 2: console.log timing trick ──────────────────────
+  // Browsers slow down console.log significantly when DevTools is open
+  // because they need to serialize the object for display.
+  var _timingResult = false;
+  function timingCheck() {
+    var start  = performance.now();
+    // Using a getter-based object — accessing it while devtools
+    // is open triggers devtools object inspection, adding latency
+    var _obj = {};
+    Object.defineProperty(_obj, 'id', {
+      get: function() {
+        _timingResult = (performance.now() - start) > 100;
+        return 0;
+      }
+    });
+    // console.log is intentionally called — this is the detection mechanism
+    // eslint-disable-next-line no-console
+    console.log('%c', _obj);
+    return _timingResult;
+  }
+
+  // ── Method 3: debugger statement timing ─────────────────────
+  // When DevTools is closed, debugger is a near-zero-cost no-op.
+  // When open, it halts execution — we measure the pause.
+  function debuggerCheck() {
+    var t = performance.now();
+    // The next line is intentional — it's the detection mechanism
+    (function(){debugger;})(); // eslint-disable-line no-debugger
+    return (performance.now() - t) > 100;
+  }
+
+  // ── Combined check ───────────────────────────────────────────
+  function isDevToolsOpen() {
+    return sizeCheck() || debuggerCheck();
+  }
+
+  // ── Overlay helper ───────────────────────────────────────────
+  function getOverlay() {
+    if (!_dtOverlay) {
+      _dtOverlay = document.getElementById('devtoolsWarning');
+    }
+    return _dtOverlay;
+  }
+
+  function onOpen() {
+    if (_dtOpen) return;
+    _dtOpen = true;
+
+    // Pause the player
+    if (window.player && !window.player.paused()) {
+      try { window.player.pause(); } catch(e) {}
+    }
+
+    // Show warning overlay inside playerContainer
+    var overlay = getOverlay();
+    if (overlay) overlay.classList.add('show');
+  }
+
+  function onClose() {
+    if (!_dtOpen) return;
+    _dtOpen = false;
+
+    // Hide warning overlay
+    var overlay = getOverlay();
+    if (overlay) overlay.classList.remove('show');
+  }
+
+  // ── Poll every 800ms ─────────────────────────────────────────
+  // Chosen carefully: fast enough to feel instant,
+  // slow enough not to impact performance.
+  function poll() {
+    if (isDevToolsOpen()) { onOpen(); }
+    else { onClose(); }
+  }
+
+  // Wait for DOM so playerContainer and overlay exist
+  document.addEventListener('DOMContentLoaded', function() {
+    _checkInterval = setInterval(poll, 800);
+  });
+
+  // Also check on resize — catches undocking DevTools
+  window.addEventListener('resize', function() {
+    if (sizeCheck()) { onOpen(); } else { onClose(); }
+  });
 
 })();
 </script>
