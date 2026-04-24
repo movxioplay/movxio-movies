@@ -3494,7 +3494,7 @@ function playEpisode(ep) {
   if (loading) loading.style.display = 'flex';
   if (noVideo) noVideo.style.display = 'none';
 
-  initPlayer(currentSeries, ep.hls_url||null, ep);
+  initPlayer(currentSeries, ep.hls_url ? ep.hls_url.trim() : null, ep);
   document.getElementById('playerContainer').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
@@ -3920,7 +3920,7 @@ async function init() {
         updateNextEpButton();
 
         // Play starting episode
-        let videoUrl = startEpisode.hls_url || null;
+        let videoUrl = startEpisode.hls_url ? startEpisode.hls_url.trim() : null;
         if (videoUrl && slugFromUrl(videoUrl)) {
           if (ltEl) ltEl.textContent = 'Preparing stream…';
           const signed = await getSignedUrl(slugFromUrl(videoUrl));
@@ -3932,7 +3932,7 @@ async function init() {
     }
 
     // ── Movie: play film's own hls_url ──
-    let videoUrl = film.hls_url || null;
+    let videoUrl = film.hls_url ? film.hls_url.trim() : null;
     if (videoUrl && slugFromUrl(videoUrl)) {
       if (ltEl) ltEl.textContent = 'Preparing stream…';
       const signed = await getSignedUrl(slugFromUrl(videoUrl));
