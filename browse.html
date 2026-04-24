@@ -1205,14 +1205,15 @@ init();
     return el;
   }
 
-  // ── Show warning + hide page content ──
+  // ── Show warning + hide entire page body ──
   function onDevToolsOpen() {
     if (_dtOpen) return;
     _dtOpen = true;
 
-    // Hide main page content
-    var main = document.querySelector('main') || document.querySelector('.browse-wrap') || document.querySelector('.film-grid');
-    if (main) main.style.visibility = 'hidden';
+    // Hide all direct children of body except the warning overlay itself
+    Array.prototype.forEach.call(document.body.children, function(el) {
+      if (el.id !== 'dtWarning') el.style.visibility = 'hidden';
+    });
 
     // Show overlay
     if (!_dtWarning) {
@@ -1223,13 +1224,15 @@ init();
     }
   }
 
-  // ── Hide warning + restore content ──
+  // ── Hide warning + restore entire page body ──
   function onDevToolsClosed() {
     if (!_dtOpen) return;
     _dtOpen = false;
 
-    var main = document.querySelector('main') || document.querySelector('.browse-wrap') || document.querySelector('.film-grid');
-    if (main) main.style.visibility = '';
+    // Restore all direct children of body
+    Array.prototype.forEach.call(document.body.children, function(el) {
+      if (el.id !== 'dtWarning') el.style.visibility = '';
+    });
 
     if (_dtWarning) _dtWarning.style.display = 'none';
   }
