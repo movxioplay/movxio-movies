@@ -3011,32 +3011,31 @@ document.addEventListener('keydown', e => {
     return el;
   }
 
-  // ── Show warning + hide entire page body ──
+  // ── Show warning + hide entire body ──
   function onDevToolsOpen() {
     if (_dtOpen) return;
     _dtOpen = true;
 
-    Array.prototype.forEach.call(document.body.children, function(el) {
-      if (el.id !== 'dtWarning') el.style.visibility = 'hidden';
-    });
+    // Hide the entire body — catches all elements regardless of nesting
+    document.body.style.visibility = 'hidden';
 
+    // Show overlay (appended to body but uses fixed positioning so always visible)
     if (!_dtWarning) {
       _dtWarning = buildWarning();
       document.body.appendChild(_dtWarning);
     } else {
       _dtWarning.style.display = 'flex';
     }
+    // Overlay must be visible even though body is hidden
+    _dtWarning.style.visibility = 'visible';
   }
 
-  // ── Hide warning + restore entire page body ──
+  // ── Hide warning + restore entire body ──
   function onDevToolsClosed() {
     if (!_dtOpen) return;
     _dtOpen = false;
 
-    Array.prototype.forEach.call(document.body.children, function(el) {
-      if (el.id !== 'dtWarning') el.style.visibility = '';
-    });
-
+    document.body.style.visibility = '';
     if (_dtWarning) _dtWarning.style.display = 'none';
   }
 
