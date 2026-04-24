@@ -3734,12 +3734,14 @@ function renderRatingBreakdown() {
   if (!rated.length) { document.getElementById('ratingBreakdown').style.display = 'none'; return; }
   document.getElementById('ratingBreakdown').style.display = 'block';
   [5,4,3,2,1].forEach(function(star) {
-    var cnt  = rated.filter(function(r){ return r.rating === star; }).length;
-    var pct  = Math.round((cnt / rated.length) * 100);
-    var row  = document.getElementById('bar' + star);
+    var cnt   = rated.filter(function(r){ return r.rating === star; }).length;
+    var pct   = Math.round((cnt / rated.length) * 100);
+    var row   = document.getElementById('bar' + star);
     if (!row) return;
-    row.querySelector('.rating-bar-fill').style.width = pct + '%';
-    row.querySelector('.rating-bar-count').textContent = cnt;
+    var fill  = row.querySelector('.rating-bar-fill');
+    var count = row.querySelector('.rating-bar-count');
+    if (fill)  fill.style.width   = pct + '%';
+    if (count) count.textContent  = cnt;
   });
 }
 
