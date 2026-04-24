@@ -4212,5 +4212,141 @@ async function submitReport() {
 })();
 </script>
 
+<!-- ══ DEVTOOLS DETECTION — hides player if DevTools opened ══ -->
+<script>
+(function() {
+
+  var _dtOpen    = false;
+  var _dtWarning = null;
+
+  // ── Build the warning overlay (shown when DevTools detected) ──
+  function buildWarning() {
+    var el = document.createElement('div');
+    el.id  = 'dtWarning';
+    el.style.cssText = [
+      'position:fixed',
+      'inset:0',
+      'z-index:99999',
+      'background:rgba(8,8,16,0.97)',
+      'display:flex',
+      'flex-direction:column',
+      'align-items:center',
+      'justify-content:center',
+      'gap:16px',
+      'backdrop-filter:blur(12px)',
+      '-webkit-backdrop-filter:blur(12px)',
+    ].join(';');
+
+    el.innerHTML = [
+      '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#e8473f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">',
+        '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>',
+        '<line x1="12" y1="9" x2="12" y2="13"/>',
+        '<line x1="12" y1="17" x2="12.01" y2="17"/>',
+      '</svg>',
+      '<div style="font-family:\'Syne\',sans-serif;font-size:22px;font-weight:800;color:#f0eee8;letter-spacing:-0.02em;">',
+        'DevTools Detected',
+      '</div>',
+      '<div style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#6b6980;text-align:center;max-width:320px;line-height:1.6;">',
+        'Please close Developer Tools to continue watching.',
+      '</div>',
+      '<div style="width:40px;height:2px;background:rgba(232,71,63,0.4);border-radius:2px;"></div>',
+      '<div style="font-family:\'Space Mono\',monospace;font-size:10px;color:#3d3d55;letter-spacing:0.12em;text-transform:uppercase;">',
+        'MOVXIO · Content Protection',
+      '</div>',
+    ].join('');
+
+    return el;
+  }
+
+  // ── Show warning + pause & hide the video ──
+  function onDevToolsOpen() {
+    if (_dtOpen) return;
+    _dtOpen = true;
+
+    // Pause and hide the video player
+    if (window.player) {
+      try { window.player.pause(); } catch(e) {}
+    }
+    var pc = document.getElementById('playerContainer');
+    if (pc) pc.style.visibility = 'hidden';
+
+    // Show overlay
+    if (!_dtWarning) {
+      _dtWarning = buildWarning();
+      document.body.appendChild(_dtWarning);
+    } else {
+      _dtWarning.style.display = 'flex';
+    }
+  }
+
+  // ── Hide warning + restore the video ──
+  function onDevToolsClosed() {
+    if (!_dtOpen) return;
+    _dtOpen = false;
+
+    // Restore player visibility
+    var pc = document.getElementById('playerContainer');
+    if (pc) pc.style.visibility = '';
+
+    // Hide overlay
+    if (_dtWarning) _dtWarning.style.display = 'none';
+  }
+
+  // ── Detection Method 1: window size gap ──
+  // DevTools docks to the side or bottom and shrinks the viewport
+  var _threshold = 160;
+  function checkSizeGap() {
+    var widthGap  = window.outerWidth  - window.innerWidth;
+    var heightGap = window.outerHeight - window.innerHeight;
+    if (widthGap > _threshold || heightGap > _threshold) {
+      onDevToolsOpen();
+    } else {
+      onDevToolsClosed();
+    }
+  }
+
+  // ── Detection Method 2: debugger timing ──
+  // When DevTools is open, the debugger statement causes a measurable delay
+  function checkDebuggerTiming() {
+    var start = performance.now();
+    // eslint-disable-next-line no-debugger
+    debugger;
+    var elapsed = performance.now() - start;
+    if (elapsed > 80) {
+      onDevToolsOpen();
+    }
+    // Note: we don't call onDevToolsClosed() here — size gap handles restoration
+  }
+
+  // ── Detection Method 3: console.log object trick ──
+  // When DevTools is open, the browser evaluates getters on logged objects
+  var _consoleOpen = false;
+  var _devObj = Object.defineProperty({}, '_', {
+    get: function() {
+      _consoleOpen = true;
+    }
+  });
+
+  function checkConsoleTrick() {
+    _consoleOpen = false;
+    console.log('%c', _devObj); // triggers getter only if console is open
+    if (_consoleOpen) onDevToolsOpen();
+  }
+
+  // ── Run all checks on an interval ──
+  setInterval(function() {
+    checkSizeGap();
+    checkDebuggerTiming();
+  }, 800);
+
+  // Console trick is heavier — run less often
+  setInterval(checkConsoleTrick, 2000);
+
+  // Also check immediately on load
+  window.addEventListener('load', checkSizeGap);
+
+})();
+</script>
+
 </body>
 </html>
