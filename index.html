@@ -3001,7 +3001,18 @@ document.addEventListener('keydown', e => {
   function onDevToolsOpen() {
     if (_dtOpen) return;
     _dtOpen = true;
+
+    // Hide entire body
     document.body.style.visibility = 'hidden';
+
+    // Lock all elements that have their own visibility timers (e.g. hero animation)
+    document.querySelectorAll('[style*="visibility"]').forEach(function(el) {
+      if (el.id !== 'dtWarning') {
+        el.setAttribute('data-dt-vis', el.style.visibility);
+        el.style.visibility = 'hidden';
+      }
+    });
+
     if (!_dtWarning) { _dtWarning = buildWarning(); document.body.appendChild(_dtWarning); }
     else { _dtWarning.style.display = 'flex'; }
     _dtWarning.style.visibility = 'visible';
@@ -3010,7 +3021,16 @@ document.addEventListener('keydown', e => {
   function onDevToolsClosed() {
     if (!_dtOpen) return;
     _dtOpen = false;
+
+    // Restore body
     document.body.style.visibility = '';
+
+    // Restore any elements we locked
+    document.querySelectorAll('[data-dt-vis]').forEach(function(el) {
+      el.style.visibility = el.getAttribute('data-dt-vis');
+      el.removeAttribute('data-dt-vis');
+    });
+
     if (_dtWarning) _dtWarning.style.display = 'none';
     _consecHits = 0;
   }
