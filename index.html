@@ -2965,121 +2965,109 @@ document.addEventListener('keydown', e => {
 })();
 </script>
 
-<!-- ══ DEVTOOLS DETECTION — hides content if DevTools opened ══ -->
+<!-- ══ DEVTOOLS DETECTION ══ -->
 <script>
 (function() {
 
   var _dtOpen    = false;
   var _dtWarning = null;
+  var _consecHits = 0; // consecutive positive detections before triggering
 
-  // ── Build the warning overlay ──
   function buildWarning() {
     var el = document.createElement('div');
     el.id  = 'dtWarning';
     el.style.cssText = [
-      'position:fixed',
-      'inset:0',
-      'z-index:99999',
-      'background:rgba(8,8,16,0.97)',
-      'display:flex',
-      'flex-direction:column',
-      'align-items:center',
-      'justify-content:center',
-      'gap:16px',
-      'backdrop-filter:blur(12px)',
-      '-webkit-backdrop-filter:blur(12px)',
+      'position:fixed','inset:0','z-index:99999',
+      'background:rgba(8,8,16,0.97)','display:flex',
+      'flex-direction:column','align-items:center',
+      'justify-content:center','gap:16px',
+      'backdrop-filter:blur(12px)','-webkit-backdrop-filter:blur(12px)',
+      'visibility:visible',
     ].join(';');
-
     el.innerHTML = [
       '<svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#e8473f" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">',
         '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>',
         '<line x1="12" y1="9" x2="12" y2="13"/>',
         '<line x1="12" y1="17" x2="12.01" y2="17"/>',
       '</svg>',
-      '<div style="font-family:\'Syne\',sans-serif;font-size:22px;font-weight:800;color:#f0eee8;letter-spacing:-0.02em;">',
-        'DevTools Detected',
-      '</div>',
-      '<div style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#6b6980;text-align:center;max-width:320px;line-height:1.6;">',
-        'Please close Developer Tools to continue.',
-      '</div>',
+      '<div style="font-family:\'Syne\',sans-serif;font-size:22px;font-weight:800;color:#f0eee8;letter-spacing:-0.02em;">DevTools Detected</div>',
+      '<div style="font-family:\'DM Sans\',sans-serif;font-size:14px;color:#6b6980;text-align:center;max-width:320px;line-height:1.6;">Please close Developer Tools to continue.</div>',
       '<div style="width:40px;height:2px;background:rgba(232,71,63,0.4);border-radius:2px;"></div>',
-      '<div style="font-family:\'Space Mono\',monospace;font-size:10px;color:#3d3d55;letter-spacing:0.12em;text-transform:uppercase;">',
-        'MOVXIO · Content Protection',
-      '</div>',
+      '<div style="font-family:\'Space Mono\',monospace;font-size:10px;color:#3d3d55;letter-spacing:0.12em;text-transform:uppercase;">MOVXIO · Content Protection</div>',
     ].join('');
-
     return el;
   }
 
-  // ── Show warning + hide entire body ──
   function onDevToolsOpen() {
     if (_dtOpen) return;
     _dtOpen = true;
-
-    // Hide the entire body — catches all elements regardless of nesting
     document.body.style.visibility = 'hidden';
-
-    // Show overlay (appended to body but uses fixed positioning so always visible)
-    if (!_dtWarning) {
-      _dtWarning = buildWarning();
-      document.body.appendChild(_dtWarning);
-    } else {
-      _dtWarning.style.display = 'flex';
-    }
-    // Overlay must be visible even though body is hidden
+    if (!_dtWarning) { _dtWarning = buildWarning(); document.body.appendChild(_dtWarning); }
+    else { _dtWarning.style.display = 'flex'; }
     _dtWarning.style.visibility = 'visible';
   }
 
-  // ── Hide warning + restore entire body ──
   function onDevToolsClosed() {
     if (!_dtOpen) return;
     _dtOpen = false;
-
     document.body.style.visibility = '';
     if (_dtWarning) _dtWarning.style.display = 'none';
+    _consecHits = 0;
   }
 
-  // ── Method 1: window size gap ──
-  var _threshold = 160;
+  // ── Method 1: window size gap (docked DevTools) ──
   function checkSizeGap() {
-    var widthGap  = window.outerWidth  - window.innerWidth;
-    var heightGap = window.outerHeight - window.innerHeight;
-    if (widthGap > _threshold || heightGap > _threshold) {
-      onDevToolsOpen();
+    return (window.outerWidth - window.innerWidth > 160) ||
+           (window.outerHeight - window.innerHeight > 160);
+  }
+
+  // ── Method 2: debugger timing (works docked AND undocked) ──
+  function checkDebugger() {
+    var s = performance.now();
+    // eslint-disable-next-line no-debugger
+    debugger;
+    return performance.now() - s > 80;
+  }
+
+  // ── Method 3: toString override trick (reliable for undocked) ──
+  // Overriding toString on a div — DevTools calls it when displaying objects
+  var _toStringHit = false;
+  var _probe = document.createElement('div');
+  Object.defineProperty(_probe, 'id', {
+    get: function() { _toStringHit = true; return 'probe'; }
+  });
+  function checkToString() {
+    _toStringHit = false;
+    console.log(_probe); // DevTools evaluates id getter when open
+    return _toStringHit;
+  }
+
+  // ── Method 4: console.log object getter trick ──
+  var _getterHit = false;
+  var _devObj = Object.defineProperty({}, '_', {
+    get: function() { _getterHit = true; }
+  });
+  function checkGetter() {
+    _getterHit = false;
+    console.log('%c', _devObj);
+    return _getterHit;
+  }
+
+  // ── Master check — requires 2 consecutive hits to avoid false positives ──
+  function runChecks() {
+    var detected = checkSizeGap() || checkDebugger() || checkToString() || checkGetter();
+    if (detected) {
+      _consecHits++;
+      if (_consecHits >= 2) onDevToolsOpen();
     } else {
+      _consecHits = 0;
       onDevToolsClosed();
     }
   }
 
-  // ── Method 2: debugger timing ──
-  function checkDebuggerTiming() {
-    var start = performance.now();
-    // eslint-disable-next-line no-debugger
-    debugger;
-    var elapsed = performance.now() - start;
-    if (elapsed > 80) {
-      onDevToolsOpen();
-    }
-  }
-
-  // ── Method 3: console object trick ──
-  var _consoleOpen = false;
-  var _devObj = Object.defineProperty({}, '_', {
-    get: function() { _consoleOpen = true; }
-  });
-  function checkConsoleTrick() {
-    _consoleOpen = false;
-    console.log('%c', _devObj);
-    if (_consoleOpen) onDevToolsOpen();
-  }
-
-  // ── Run checks ──
-  setInterval(function() {
-    checkSizeGap();
-    checkDebuggerTiming();
-  }, 800);
-  setInterval(checkConsoleTrick, 2000);
-  window.addEventListener('load', checkSizeGap);
+  // Run every 500ms for faster response
+  setInterval(runChecks, 500);
+  window.addEventListener('load', runChecks);
 
 })();
 </script>
