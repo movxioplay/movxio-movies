@@ -391,6 +391,12 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
   border-radius: 3px; padding: 1px 5px; font-size: 9px;
   color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.07em;
 }
+.card-ep-label {
+  font-size: 10px; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 2px; font-family: 'Space Mono', monospace;
+}
+.card-type.ep { color: #ffd580; }
 
 /* ── EMPTY + SKELETON ── */
 .empty-state { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--text-muted); }
@@ -416,7 +422,7 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 }
 .pg-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
 .pg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
-.pg-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+.pg-btn.disabled, .pg-btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 .pg-ellipsis { color: var(--text-muted); font-family: 'Space Mono', monospace; font-size: 11px; padding: 0 4px; }
 
 /* ── FOOTER ── */
@@ -575,6 +581,7 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
         <div class="gdp-section">
           <div class="gdp-section-label">TV / Reality</div>
           <div class="gdp-grid">
+            <button class="gdp-pill" data-genre="series"    onclick="setGenreDrop(this,'series','🎬','TV Series')">    <span class="icon">🎬</span> TV Series</button>
             <button class="gdp-pill" data-genre="tv-show"   onclick="setGenreDrop(this,'tv-show','📺','TV Show')">     <span class="icon">📺</span> TV Show</button>
             <button class="gdp-pill" data-genre="tv-movie"  onclick="setGenreDrop(this,'tv-movie','📡','TV Movie')">   <span class="icon">📡</span> TV Movie</button>
             <button class="gdp-pill" data-genre="game-show" onclick="setGenreDrop(this,'game-show','🎮','Game-Show')"> <span class="icon">🎮</span> Game-Show</button>
@@ -785,8 +792,10 @@ function formatDur(s) { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); re
 
 // Determine content type label
 function contentType(film) {
+  if (film._type === 'episode') return 'EP';
   const g = (film.genre||'').toLowerCase();
-  if (g.includes('tv-show') || g.includes('sitcom') || g.includes('tv show')) return 'TV';
+  const t = (film.type||'').toLowerCase();
+  if (t === 'series' || g.includes('tv-show') || g.includes('tv-series') || g.includes('sitcom') || g.includes('series')) return 'TV';
   if (g.includes('tv-movie')) return 'MOVIE';
   if (g.includes('documentary')) return 'DOC';
   return 'MOVIE';
@@ -836,7 +845,7 @@ function filmCard(film, idx = 0) {
   const badgeClass = film.badge === 'New' ? 'new' : film.badge === 'Classic' ? 'classic' : film.badge === 'Coming Soon' ? 'coming' : '';
   const saved = isInWatchlist(film.id);
   const cType = contentType(film);
-  const typeClass = cType === 'TV' ? 'tv' : 'movie';
+  const typeClass = cType === 'TV' ? 'tv' : cType === 'EP' ? 'ep' : 'movie';
 
   return `
   <div class="film-card" onclick="trackAndGo('${esc(film.id)}')">
@@ -854,6 +863,7 @@ function filmCard(film, idx = 0) {
     </div>
     <div class="card-info">
       <div class="card-title">${esc(film.title)}</div>
+      ${film._type === 'episode' ? `<div class="card-ep-label">S${film.season} E${film.episode} · ${esc(film.ep_title||'')}</div>` : ''}
       <div class="card-meta">
         <span class="card-year">${film.year||''}</span>
         ${primaryGenre ? `<span class="card-genre-tag">${esc(primaryGenre)}</span>` : ''}
@@ -867,7 +877,12 @@ function trackAndGo(id) {
   history = [id, ...history.filter(i => i !== id)].slice(0, 30);
   localStorage.setItem('mvx_history', JSON.stringify(history));
   const film = allFilms.find(f => f.id === id);
-  window.location.href = film && film.slug ? `/film/${film.slug}` : `watch.html?id=${id}`;
+  if (!film) return;
+  if (film._type === 'episode') {
+    window.location.href = `watch.html?id=${id}&type=episode&series=${film.series_id}`;
+  } else {
+    window.location.href = film.slug ? `/film/${film.slug}` : `watch.html?id=${id}`;
+  }
 }
 
 // ── GENRE ─────────────────────────────────────────────────────
@@ -910,7 +925,7 @@ function setGenre(_, genre) {
 }
 
 // ── MAIN FILTER ───────────────────────────────────────────────
-function filterFilms() {
+function filterFilms(silent = false) {
   const q       = document.getElementById('searchInput').value.toLowerCase().trim();
   const country = document.getElementById('countryFilter').value;
   const year    = document.getElementById('yearFilter').value;
@@ -922,16 +937,16 @@ function filterFilms() {
   let pool = isWatchlistMode
     ? allFilms.filter(f => getWatchlist().includes(f.id))
     : isFeaturedMode
-    ? allFilms.filter(f => f.featured === true)
+    ? allFilms.filter(f => f.featured === true && f._type !== 'series')
     : isNewThisWeek
-    ? allFilms.filter(f => f.created_at && f.created_at >= sevenDaysAgo)
-    : allFilms;
+    ? allFilms.filter(f => f._type !== 'series' && f.created_at && f.created_at >= sevenDaysAgo)
+    : allFilms.filter(f => f._type !== 'series');
 
   filteredFilms = pool.filter(f => {
     if (f.status && f.status !== 'active') return false;
     const genres = (f.genre||'').split(',').map(g=>g.trim());
     const matchGenre   = currentGenre === 'all' || genres.includes(currentGenre);
-    const matchQ       = !q || f.title.toLowerCase().includes(q) || (f.description||'').toLowerCase().includes(q) || (f.director||'').toLowerCase().includes(q) || (f.actors||'').toLowerCase().includes(q);
+    const matchQ       = !q || f.title.toLowerCase().includes(q) || (f.ep_title||'').toLowerCase().includes(q) || (f.description||'').toLowerCase().includes(q) || (f.director||'').toLowerCase().includes(q) || (f.actors||'').toLowerCase().includes(q);
     const matchCountry = !country || (f.country||'').split(',').map(c=>c.trim()).includes(country);
     const matchYear    = !year ? true : year === 'older' ? (f.year && f.year < 2018) : String(f.year) === year;
     const matchLang    = !lang || (f.language||'').toLowerCase() === lang;
@@ -952,9 +967,10 @@ function filterFilms() {
     }
   });
 
-  currentPage = 1;
+  // Silent mode: preserve user's current page position (background loading)
+  if (!silent) currentPage = 1;
   renderGrid();
-  renderActiveFilters(q, country, year, lang, minRating);
+  if (!silent) renderActiveFilters(q, country, year, lang, minRating);
 }
 
 function renderGrid() {
@@ -989,14 +1005,14 @@ function renderPagination(totalPages) {
   const show = new Set([1, totalPages]);
   for (let i = Math.max(1, p - 2); i <= Math.min(totalPages, p + 2); i++) show.add(i);
   const sorted = [...show].sort((a, b) => a - b);
-  let html = `<button class="pg-btn${p===1?' disabled':''}" onclick="goPage(${p-1})">‹ Prev</button>`;
+  let html = `<button class="pg-btn" ${p===1?'disabled':''} onclick="goPage(${p-1})">‹ Prev</button>`;
   let prev = 0;
   for (const n of sorted) {
     if (n - prev > 1) html += `<span class="pg-ellipsis">…</span>`;
     html += `<button class="pg-btn${n===p?' active':''}" onclick="goPage(${n})">${n}</button>`;
     prev = n;
   }
-  html += `<button class="pg-btn${p===totalPages?' disabled':''}" onclick="goPage(${p+1})">Next ›</button>`;
+  html += `<button class="pg-btn" ${p===totalPages?'disabled':''} onclick="goPage(${p+1})">Next ›</button>`;
   wrap.innerHTML = html;
 }
 
@@ -1006,6 +1022,7 @@ function goPage(n) {
   if (n < 1 || n > totalPages) return;
   currentPage = n;
   renderGrid();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function renderActiveFilters(q, country, year, lang, minRating) {
@@ -1029,6 +1046,7 @@ function clearAllFilters() {
   document.getElementById('langFilter').value = '';
   document.getElementById('sortFilter').value = 'newest';
   document.getElementById('ratingFilter').value = '0';
+  currentPage = 1;
   setGenreClear();
 }
 function setGenreClear()  { const btn = document.querySelector('[data-genre="all"]'); if(btn) setGenre(btn,'all'); }
@@ -1122,21 +1140,145 @@ window.addEventListener('resize', () => {
     if (filteredFilms.length) { currentPage = 1; renderGrid(); }
   }, 200);
 });
+
+// ── FETCH STATE ───────────────────────────────────────────────
+let _allMoviesLoaded   = false;
+let _allEpisodesLoaded = false;
+let _movieOffset       = 0;
+let _episodeOffset     = 0;
+let _movieFailed       = false;
+let _episodeFailed     = false;
+const FETCH_LIMIT      = 100;
+
+function supaHeaders() {
+  return { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` };
+}
+
+async function fetchMoreMovies() {
+  if (_allMoviesLoaded || _movieFailed) return;
+  try {
+    const fields = 'id,title,year,genre,thumbnail_url,imdb_rating,badge,views,country,duration_secs,language,featured,created_at,status,type,total_seasons,director,actors,slug';
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/films?select=${fields}&type=eq.movie&status=eq.active&order=created_at.desc&limit=${FETCH_LIMIT}&offset=${_movieOffset}`,
+      { headers: supaHeaders() }
+    );
+    if (!res.ok) { _movieFailed = true; _allMoviesLoaded = true; return; }
+    const batch = await res.json();
+    batch.forEach(f => f._type = 'movie');
+    // Deduplicate by id
+    const existing = new Set(allFilms.map(f => f.id));
+    allFilms = [...allFilms, ...batch.filter(f => !existing.has(f.id))];
+    _movieOffset += batch.length;
+    if (batch.length < FETCH_LIMIT) _allMoviesLoaded = true;
+  } catch(e) {
+    _movieFailed = true;
+    _allMoviesLoaded = true; // stop the loop
+  }
+}
+
+async function fetchMoreEpisodes() {
+  if (_allEpisodesLoaded || _episodeFailed) return;
+  const epFields = 'id,series_id,season,episode,title,thumbnail_url,description,hls_url,duration_secs,air_date,created_at';
+  const srFields = 'id,title,year,genre,thumbnail_url,imdb_rating,badge,views,country,language,featured,created_at,total_seasons';
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/episodes?select=${epFields}&order=created_at.desc&limit=${FETCH_LIMIT}&offset=${_episodeOffset}`,
+      { headers: supaHeaders() }
+    );
+    if (!res.ok) { _episodeFailed = true; _allEpisodesLoaded = true; return; }
+    const episodes = await res.json();
+    if (!episodes.length) { _allEpisodesLoaded = true; return; }
+
+    // Build series map from already-loaded series
+    let seriesMap = {};
+    allFilms.filter(f => f._type === 'series').forEach(s => seriesMap[s.id] = s);
+
+    // Find series IDs we haven't fetched yet
+    const newSeriesIds = [...new Set(
+      episodes.map(e => e.series_id).filter(id => id && !seriesMap[id])
+    )];
+
+    if (newSeriesIds.length) {
+      try {
+        const srRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/films?select=${srFields}&id=in.(${newSeriesIds.join(',')})`,
+          { headers: supaHeaders() }
+        );
+        if (srRes.ok) {
+          const srArr = await srRes.json();
+          srArr.forEach(s => { s._type = 'series'; seriesMap[s.id] = s; allFilms.push(s); });
+        }
+      } catch(e) { /* series metadata fetch failed, episodes will use own thumbnail */ }
+    }
+
+    // Normalize episodes — inherit series-level metadata
+    const existing = new Set(allFilms.map(f => f.id));
+    const normalized = episodes
+      .filter(e => !existing.has(e.id))
+      .map(e => {
+        const s = seriesMap[e.series_id] || {};
+        return {
+          id:            e.id,
+          title:         s.title         || e.title,
+          ep_title:      e.title,
+          thumbnail_url: s.thumbnail_url || e.thumbnail_url,
+          year:          s.year          || (e.air_date ? new Date(e.air_date).getFullYear() : null),
+          genre:         s.genre         || 'series',
+          country:       s.country       || '',
+          language:      s.language      || '',
+          imdb_rating:   s.imdb_rating   || null,
+          badge:         s.badge         || null,
+          views:         s.views         || 0,
+          featured:      s.featured      || false,
+          created_at:    e.created_at,
+          status:        'active',
+          hls_url:       e.hls_url,
+          duration_secs: e.duration_secs,
+          season:        e.season,
+          episode:       e.episode,
+          series_id:     e.series_id,
+          total_seasons: s.total_seasons || null,
+          _type:         'episode',
+        };
+      });
+
+    allFilms = [...allFilms, ...normalized];
+    _episodeOffset += episodes.length;
+    if (episodes.length < FETCH_LIMIT) _allEpisodesLoaded = true;
+  } catch(e) {
+    _episodeFailed = true;
+    _allEpisodesLoaded = true; // stop the loop
+  }
+}
+
 async function init() {
   readURL();
-  const skeletonHTML = Array(18).fill(0).map(() => `<div class="skeleton"></div>`).join('');
-  document.getElementById('filmGrid').innerHTML = skeletonHTML;
+  document.getElementById('filmGrid').innerHTML = Array(18).fill(0).map(() => `<div class="skeleton"></div>`).join('');
 
-  try {
-    const fields = 'id,title,year,genre,thumbnail_url,imdb_rating,badge,views,country,duration_secs,language,featured,created_at,status';
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/films?select=${fields}&order=created_at.desc`, {
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-    });
-    allFilms = res.ok ? await res.json() : DEMO;
-    if (!allFilms.length) allFilms = DEMO;
-  } catch { allFilms = DEMO; }
+  // First batch — movies + episodes in parallel for fast first paint
+  await Promise.all([fetchMoreMovies(), fetchMoreEpisodes()]);
+
+  // If both failed, fall back to demo data
+  if (_movieFailed && _episodeFailed) {
+    allFilms = DEMO;
+  } else if (!allFilms.filter(f => f._type === 'movie' || f._type === 'episode').length) {
+    allFilms = DEMO;
+  }
 
   filterFilms();
+
+  // Silently load remaining batches in the background
+  loadRemaining();
+}
+
+async function loadRemaining() {
+  // Stop once both sources are fully loaded or have permanently failed
+  while ((!_allMoviesLoaded && !_movieFailed) || (!_allEpisodesLoaded && !_episodeFailed)) {
+    await Promise.all([fetchMoreMovies(), fetchMoreEpisodes()]);
+    // Silent refresh — preserves user's current page position
+    filterFilms(true);
+    await new Promise(r => setTimeout(r, 1000)); // 1s gap between batches
+  }
 }
 
 init();
