@@ -2616,8 +2616,29 @@ async function incrementViews(fid) {
 
 // ── Init Player ───────────────────────────────────────────────
 function initPlayer(film, videoUrl, episode) {
-  // Guard: dispose any existing player instance before re-initialising
-  if (player) { try { player.dispose(); } catch(e) {} player = null; }
+  // FIX: Single, clean teardown — dispose existing player first (removes its DOM node too)
+  if (player) {
+    try { player.dispose(); } catch(e) {}
+    player = null;
+  }
+  // FIX: Remove any leftover video element (in case dispose didn't clean it)
+  var oldVideo = document.getElementById('movxioPlayer');
+  if (oldVideo) oldVideo.remove();
+
+  // FIX: Reset play state for new episode/film here (was scattered in playEpisode before)
+  var container = document.getElementById('playerContainer');
+  container.classList.remove('is-playing');
+  var initBtn = document.getElementById('initialPlayBtn');
+  if (initBtn) initBtn.style.opacity = '0';
+
+  // Create a fresh <video> element for Video.js to own
+  var newVideo = document.createElement('video');
+  newVideo.id        = 'movxioPlayer';
+  newVideo.className = 'video-js';
+  newVideo.setAttribute('playsinline', '');
+  newVideo.setAttribute('preload', 'metadata');
+  container.appendChild(newVideo);
+
   currentFilm = film;
 
   if (episode) {
@@ -2681,6 +2702,8 @@ function initPlayer(film, videoUrl, episode) {
   const btnCC = document.getElementById('btnCC');
   btnCC.style.display = '';
   const ccList = document.getElementById('ccList');
+  // FIX: Clear CC list before adding new items — prevents duplicate entries on episode switch
+  ccList.innerHTML = '';
   const checkSVG = '<svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
 
   // Show CC button if subtitles available
@@ -3473,21 +3496,6 @@ function playEpisode(ep) {
 
   updateEpCurrentInfo();
   updateNextEpButton();
-
-  if (player) { player.dispose(); player = null; }
-  var container = document.getElementById('playerContainer');
-  // Reset play state for new episode
-  container.classList.remove('is-playing');
-  var initBtn = document.getElementById('initialPlayBtn');
-  if (initBtn) initBtn.style.opacity = '0';
-  var oldVideo  = document.getElementById('movxioPlayer');
-  if (oldVideo) oldVideo.remove();
-  var newVideo    = document.createElement('video');
-  newVideo.id     = 'movxioPlayer';
-  newVideo.className = 'video-js';
-  newVideo.setAttribute('playsinline','');
-  newVideo.setAttribute('preload','metadata');
-  container.appendChild(newVideo);
 
   var loading = document.getElementById('playerLoading');
   var noVideo = document.getElementById('noVideo');
