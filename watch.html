@@ -2058,11 +2058,11 @@ async function fetchSingleFilm(identifier) {
   } catch { return null; }
 }
 
-// Fetch all films (for related sidebar)
+// Fetch all films (for related sidebar) — limited to top 150 by views to keep payload manageable
 async function fetchFilms() {
   if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_KEY) return DEMO;
   try {
-    const res = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/films?select=*`, {
+    const res = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/films?select=*&order=views.desc&limit=150`, {
       headers: { 'apikey': CONFIG.SUPABASE_KEY, 'Authorization': `Bearer ${CONFIG.SUPABASE_KEY}` }
     });
     return res.ok ? await res.json() : DEMO;
@@ -2411,13 +2411,14 @@ function buildQualityMenu() {
 
   renderLevels();
 
-  // Toggle popup
-  btn.addEventListener('click', (e) => {
+  // Toggle popup — use .onclick (not addEventListener) so re-calling buildQualityMenu()
+  // on episode switch replaces the handler instead of stacking a new one each time.
+  btn.onclick = (e) => {
     e.stopPropagation();
     document.getElementById('qualityMenu').classList.toggle('open');
     document.getElementById('settingsMenu').classList.remove('open');
     document.getElementById('ccMenu') && document.getElementById('ccMenu').classList.remove('open');
-  });
+  };
 }
 
 // Quality menu is wired inside initPlayer() once the player instance exists
@@ -2625,11 +2626,27 @@ function initPlayer(film, videoUrl, episode) {
   var oldVideo = document.getElementById('movxioPlayer');
   if (oldVideo) oldVideo.remove();
 
-  // FIX: Reset play state for new episode/film here (was scattered in playEpisode before)
+  // FIX: Reset ALL transient UI state for new episode/film
   var container = document.getElementById('playerContainer');
   container.classList.remove('is-playing');
   var initBtn = document.getElementById('initialPlayBtn');
   if (initBtn) initBtn.style.opacity = '0';
+
+  // Dismiss resume banner from previous episode
+  document.getElementById('resumeBanner').classList.remove('show');
+
+  // Clear any next-episode countdown/toast still running from previous episode
+  if (typeof _necTimer !== 'undefined') clearInterval(_necTimer);
+  var necOverlay = document.getElementById('nextEpCountdown');
+  if (necOverlay) necOverlay.classList.remove('show');
+  var oldToast = document.getElementById('nextEpToast');
+  if (oldToast) oldToast.remove();
+
+  // Reset quality menu — hide button and clear old options so E2 gets a fresh build
+  var qBtn = document.getElementById('btnQuality');
+  var qList = document.getElementById('qualityList');
+  if (qBtn) { qBtn.style.display = 'none'; qBtn.onclick = null; }
+  if (qList) qList.innerHTML = '';
 
   // Create a fresh <video> element for Video.js to own
   var newVideo = document.createElement('video');
@@ -2701,6 +2718,8 @@ function initPlayer(film, videoUrl, episode) {
   // CC button — always visible
   const btnCC = document.getElementById('btnCC');
   btnCC.style.display = '';
+  btnCC.style.opacity = '';       // reset dim state from any previous episode
+  btnCC.classList.remove('active');
   const ccList = document.getElementById('ccList');
   // FIX: Clear CC list before adding new items — prevents duplicate entries on episode switch
   ccList.innerHTML = '';
@@ -2722,14 +2741,14 @@ function initPlayer(film, videoUrl, episode) {
       ccList.appendChild(item);
     });
 
-    ccList.addEventListener('click', (e) => {
+    // FIX: Use .onclick (not addEventListener) so episode switches replace the handler, not stack it
+    ccList.onclick = (e) => {
       const item = e.target.closest('.cc-item');
       if (!item) return;
       document.querySelectorAll('.cc-item').forEach(i => i.classList.remove('active'));
       item.classList.add('active');
       const isOff = item.dataset.lang === 'off';
       const targetLang = item.dataset.srclang || '';
-      // Disable all tracks first
       const tracks = player.textTracks();
       for (let i = 0; i < tracks.length; i++) {
         if (isOff) {
@@ -2740,7 +2759,7 @@ function initPlayer(film, videoUrl, episode) {
       }
       document.getElementById('ccMenu').classList.remove('open');
       document.getElementById('btnCC').classList.toggle('active', !isOff);
-    });
+    };
   } else {
     // No subtitles — show placeholder
     const noSub = document.createElement('div');
@@ -2748,6 +2767,7 @@ function initPlayer(film, videoUrl, episode) {
     noSub.textContent = 'No subtitles available';
     ccList.appendChild(noSub);
     btnCC.style.opacity = '0.45';
+    ccList.onclick = null; // no handler needed when no subs
   }
 
   player.on('waiting', () => {
@@ -2758,6 +2778,16 @@ function initPlayer(film, videoUrl, episode) {
   });
   player.on('canplay', () => {
     document.getElementById('bufferingIndicator').style.display = 'none';
+  });
+
+  // Show a user-friendly error state instead of spinning forever on HLS failure
+  player.on('error', () => {
+    console.warn('[MOVXIO] Player error:', player.error && player.error());
+    document.getElementById('bufferingIndicator').style.display = 'none';
+    loading.style.display = 'none';
+    noVideo.style.display = 'flex';
+    var msg = noVideo.querySelector('p');
+    if (msg) msg.textContent = 'Stream unavailable — please try again later.';
   });
 
   player.src({ type: 'application/x-mpegURL', src: videoUrl });
@@ -3437,7 +3467,7 @@ function renderEpisodeListWatch(season) {
       ? '<img src="' + esc(ep.thumbnail_url) + '" alt="" loading="lazy">'
       : '<div class="ep-thumb-ph">🎬</div>';
     var watched   = isEpisodeWatched(ep);
-    return '<div class="episode-item' + (isActive?' active':'') + '" data-epid="' + ep.id + '" onclick="(function(el){var ep=allEpisodes.find(function(e){return e.id===el.dataset.epid;});playEpisode(ep);})(this)">' +
+    return '<div class="episode-item' + (isActive?' active':'') + '" data-epid="' + esc(ep.id) + '">' +
       '<div class="ep-thumb-wrap">' + thumbHtml + '<div class="ep-play-icon"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6V2z"/></svg></div></div>' +
       '<div class="ep-info">' +
         '<div class="ep-num">S'+ep.season+' E'+ep.episode+(watched?' ✓':'')+'</div>' +
@@ -3447,6 +3477,15 @@ function renderEpisodeListWatch(season) {
       (watched ? '<div class="ep-watched-dot"></div>' : '') +
     '</div>';
   }).join('');
+
+  // Delegated click listener — replaced each render so no accumulation
+  list.onclick = function(e) {
+    var item = e.target.closest('.episode-item');
+    if (!item) return;
+    var ep = allEpisodes.find(function(e){ return e.id === item.dataset.epid; });
+    if (ep) playEpisode(ep);
+  };
+
   setTimeout(function() {
     var active = list.querySelector('.episode-item.active');
     if (active) active.scrollIntoView({ block: 'nearest' });
@@ -3502,21 +3541,24 @@ function playEpisode(ep) {
   if (loading) loading.style.display = 'flex';
   if (noVideo) noVideo.style.display = 'none';
 
-  initPlayer(currentSeries, ep.hls_url ? ep.hls_url.trim() : null, ep);
+  // Sign URL if needed before initialising player (same logic as init())
+  var rawUrl = ep.hls_url ? ep.hls_url.trim() : null;
+  var slug   = slugFromUrl(rawUrl);
+  if (rawUrl && slug) {
+    getSignedUrl(slug).then(function(signed) {
+      if (signed) rawUrl = signed;
+      else console.warn('[MOVXIO] Signing failed for episode switch, using raw URL:', rawUrl);
+      initPlayer(currentSeries, rawUrl, ep);
+    });
+  } else {
+    initPlayer(currentSeries, rawUrl, ep);
+  }
   document.getElementById('playerContainer').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
 function playNextEpisode() {
   var wrap = document.getElementById('nextEpWrap');
   if (wrap && wrap._nextEp) playEpisode(wrap._nextEp);
-}
-
-function setupAutoNextEpisode() {
-  if (!player) return;
-  player.on('ended', function() {
-    var wrap = document.getElementById('nextEpWrap');
-    if (wrap && wrap._nextEp) showNextEpToast(wrap._nextEp);
-  });
 }
 
 function showNextEpToast(nextEp) {
@@ -3617,9 +3659,8 @@ function getEpisodeSavedPosition(seriesId, ep) {
 
 
 
-// ══════════════════════════════════════════════════════════════
-// REVIEWS & RATINGS
-// ══════════════════════════════════════════════════════════════
+
+// ── Reviews section removed — stub vars kept to avoid reference errors ──
 var selectedRating  = 0;
 var allReviews      = [];
 var reviewsPerPage  = 5;
@@ -3627,240 +3668,17 @@ var reviewsShown    = 5;
 var hasReviewed     = false;
 var reviewFilmId    = null;
 
-// ── Star picker interaction ────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
-  var stars = document.querySelectorAll('.star-btn');
-  stars.forEach(function(btn) {
-    btn.addEventListener('mouseenter', function() {
-      var h = parseInt(btn.dataset.star);
-      stars.forEach(function(s) { s.classList.toggle('hover', parseInt(s.dataset.star) <= h); });
-    });
-    btn.addEventListener('mouseleave', function() {
-      stars.forEach(function(s) { s.classList.remove('hover'); s.classList.toggle('active', parseInt(s.dataset.star) <= selectedRating); });
-    });
-    btn.addEventListener('click', function() {
-      selectedRating = parseInt(btn.dataset.star);
-      stars.forEach(function(s) { s.classList.toggle('active', parseInt(s.dataset.star) <= selectedRating); s.classList.remove('hover'); });
-    });
-  });
-
-  // Char counter
-  var ta = document.getElementById('reviewText');
-  if (ta) {
-    ta.addEventListener('input', function() {
-      var cc = document.getElementById('reviewCharCount');
-      if (cc) cc.textContent = ta.value.length;
-    });
-  }
-});
-
-// ── Load reviews from Supabase ─────────────────────────────────
-async function loadReviewsForFilm(filmId) {
-  reviewFilmId = filmId;
-  try {
-    var res = await fetch(
-      CONFIG.SUPABASE_URL + '/rest/v1/reviews?film_id=eq.' + filmId + '&select=*&order=created_at.desc',
-      { headers: { 'apikey': CONFIG.SUPABASE_KEY, 'Authorization': 'Bearer ' + CONFIG.SUPABASE_KEY } }
-    );
-    if (!res.ok) return;
-    allReviews = await res.json();
-    renderReviews();
-    renderRatingBreakdown();
-    checkAlreadyReviewed(filmId);
-    document.getElementById('reviewsSection').style.display = 'block';
-  } catch(e) { console.warn('Reviews load error:', e); }
-}
-
-function renderReviews() {
-  var list  = document.getElementById('reviewsList');
-  var count = document.getElementById('reviewCount');
-  if (!list) return;
-
-  if (count) count.textContent = '(' + allReviews.length + ')';
-
-  if (!allReviews.length) {
-    list.innerHTML = '<div class="reviews-empty">No reviews yet — be the first!</div>';
-    document.getElementById('reviewsAvg').style.display = 'none';
-    document.getElementById('ratingBreakdown').style.display = 'none';
-    return;
-  }
-
-  // Average rating
-  var rated   = allReviews.filter(function(r){ return r.rating > 0; });
-  var avg     = rated.length ? (rated.reduce(function(s,r){ return s+r.rating; }, 0) / rated.length) : 0;
-  var avgEl   = document.getElementById('avgScore');
-  var starsEl = document.getElementById('avgStars');
-  if (avgEl) avgEl.textContent  = avg.toFixed(1);
-  if (starsEl) starsEl.textContent = renderStars(Math.round(avg));
-  document.getElementById('reviewsAvg').style.display = rated.length ? 'flex' : 'none';
-
-  // Render cards
-  reviewsShown = reviewsPerPage;
-  renderReviewCards();
-}
-
-function renderReviewCards() {
-  var list = document.getElementById('reviewsList');
-  var loadMore = document.getElementById('reviewsLoadMore');
-  if (!list) return;
-
-  var visible = allReviews.slice(0, reviewsShown);
-  list.innerHTML = visible.map(function(r) {
-    var initial = (r.author_name || 'A').charAt(0).toUpperCase();
-    var date    = r.created_at ? new Date(r.created_at).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : '';
-    var stars   = r.rating > 0 ? renderStars(r.rating) : '';
-    var helpful = r.helpful_count || 0;
-    var voted   = localStorage.getItem('mvx_hlp_' + r.id) === '1';
-    return '<div class="review-card">' +
-      '<div class="review-card-header">' +
-        '<div class="review-avatar">' + esc(initial) + '</div>' +
-        '<div class="review-author-wrap">' +
-          '<div class="review-author">' + esc(r.author_name || 'Anonymous') + '</div>' +
-          (date ? '<div class="review-date">' + date + '</div>' : '') +
-        '</div>' +
-        (stars ? '<div class="review-stars">' + stars + '</div>' : '') +
-      '</div>' +
-      '<div class="review-body">' + esc(r.body || '') + '</div>' +
-      '<div class="review-helpful">' +
-        '<span class="review-helpful-label">Helpful?</span>' +
-        '<button class="helpful-btn' + (voted ? ' voted' : '') + '" onclick="markHelpful(\'' + esc(String(r.id)) + '\', this)">👍 ' + helpful + '</button>' +
-      '</div>' +
-    '</div>';
-  }).join('');
-
-  if (loadMore) loadMore.style.display = allReviews.length > reviewsShown ? 'block' : 'none';
-}
-
-function renderStars(n) {
-  var s = '';
-  for (var i = 1; i <= 5; i++) s += (i <= n ? '★' : '☆');
-  return s;
-}
-
-function renderRatingBreakdown() {
-  var rated = allReviews.filter(function(r){ return r.rating > 0; });
-  if (!rated.length) { document.getElementById('ratingBreakdown').style.display = 'none'; return; }
-  document.getElementById('ratingBreakdown').style.display = 'block';
-  [5,4,3,2,1].forEach(function(star) {
-    var cnt   = rated.filter(function(r){ return r.rating === star; }).length;
-    var pct   = Math.round((cnt / rated.length) * 100);
-    var row   = document.getElementById('bar' + star);
-    if (!row) return;
-    var fill  = row.querySelector('.rating-bar-fill');
-    var count = row.querySelector('.rating-bar-count');
-    if (fill)  fill.style.width   = pct + '%';
-    if (count) count.textContent  = cnt;
-  });
-}
-
-function loadMoreReviews() {
-  reviewsShown += reviewsPerPage;
-  renderReviewCards();
-}
-
-// ── Check if user already reviewed ────────────────────────────
-function checkAlreadyReviewed(filmId) {
-  var fp  = getFingerprint();
-  var mine = allReviews.find(function(r){ return r.fingerprint === fp; });
-  hasReviewed = !!mine;
-  document.getElementById('reviewFormWrap').style.display  = hasReviewed ? 'none' : 'block';
-  document.getElementById('alreadyReviewed').style.display = hasReviewed ? 'block' : 'none';
-}
-
-// ── Submit review ──────────────────────────────────────────────
-async function submitReview() {
-  if (!reviewFilmId) return;
-  var body = (document.getElementById('reviewText').value || '').trim();
-  if (!body) { alert('Please write something before posting.'); return; }
-  if (selectedRating === 0) { alert('Please select a star rating.'); return; }
-
-  var btn = document.getElementById('reviewSubmitBtn');
-  btn.disabled = true;
-  btn.textContent = 'Posting...';
-
-  var fp   = getFingerprint();
-  var name = (document.getElementById('reviewName').value || '').trim() || 'Anonymous';
-
-  var data = {
-    film_id:     reviewFilmId,
-    fingerprint: fp,
-    author_name: name,
-    rating:      selectedRating,
-    body:        body,
-  };
-
-  try {
-    var res = await fetch(CONFIG.SUPABASE_URL + '/rest/v1/reviews', {
-      method: 'POST',
-      headers: {
-        'apikey': CONFIG.SUPABASE_KEY,
-        'Authorization': 'Bearer ' + CONFIG.SUPABASE_KEY,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation'
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (res.ok) {
-      var newReview = await res.json();
-      var review = Array.isArray(newReview) ? newReview[0] : newReview;
-      review = Object.assign({ created_at: new Date().toISOString(), helpful_count: 0 }, data, review);
-      allReviews.unshift(review);
-      renderReviews();
-      renderRatingBreakdown();
-      hasReviewed = true;
-      document.getElementById('reviewFormWrap').style.display  = 'none';
-      document.getElementById('alreadyReviewed').style.display = 'block';
-      showReviewToast('Review posted! Thanks for sharing.');
-    } else {
-      var err = await res.json();
-      // Duplicate fingerprint — already reviewed
-      if (err.code === '23505') {
-        hasReviewed = true;
-        document.getElementById('reviewFormWrap').style.display  = 'none';
-        document.getElementById('alreadyReviewed').style.display = 'block';
-      } else {
-        showReviewToast('Could not post review. Please try again.', true);
-        btn.disabled = false; btn.textContent = 'Post Review';
-      }
-    }
-  } catch(e) {
-    showReviewToast('Connection error. Please try again.', true);
-    btn.disabled = false; btn.textContent = 'Post Review';
-  }
-}
-
-// ── Mark helpful ───────────────────────────────────────────────
-async function markHelpful(reviewId, btn) {
-  var key = 'mvx_hlp_' + reviewId;
-  if (localStorage.getItem(key) === '1') return;
-  localStorage.setItem(key, '1');
-  btn.classList.add('voted');
-
-  try {
-    // Increment helpful_count via RPC
-    await fetch(CONFIG.SUPABASE_URL + '/rest/v1/rpc/increment_helpful', {
-      method: 'POST',
-      headers: {
-        'apikey': CONFIG.SUPABASE_KEY,
-        'Authorization': 'Bearer ' + CONFIG.SUPABASE_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ review_id: reviewId })
-    });
-    // Update UI optimistically
-    var current = parseInt(btn.textContent.replace('👍 ', '')) || 0;
-    btn.textContent = '👍 ' + (current + 1);
-  } catch(e) {}
-}
-
-function showReviewToast(msg, isError) {
-  var t = document.createElement('div');
-  t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:800;background:var(--surface);border:1px solid ' + (isError ? 'var(--accent)' : 'var(--green)') + ';color:' + (isError ? 'var(--accent)' : 'var(--green)') + ';padding:12px 22px;border-radius:8px;font-size:14px;font-weight:500;font-family:DM Sans,sans-serif;box-shadow:0 8px 32px rgba(0,0,0,0.5);white-space:nowrap;';
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(function(){ if(t.parentNode) t.remove(); }, 3500);
-}
+// ── Reviews section was removed from HTML — stub out functions to prevent null errors ──
+function loadReviewsForFilm(filmId) { /* reviews UI removed */ }
+function renderReviews() {}
+function renderRatingBreakdown() {}
+function renderReviewCards() {}
+function loadMoreReviews() {}
+function checkAlreadyReviewed(filmId) {}
+async function submitReview() {}
+async function markHelpful(reviewId, btn) {}
+function showReviewToast(msg, isError) {}
+function renderStars(n) { return ''; }
 
 // ── Main ──────────────────────────────────────────────────────
 async function init() {
@@ -3934,7 +3752,12 @@ async function init() {
         if (videoUrl && slugFromUrl(videoUrl)) {
           if (ltEl) ltEl.textContent = 'Preparing stream…';
           const signed = await getSignedUrl(slugFromUrl(videoUrl));
-          if (signed) videoUrl = signed;
+          if (signed) {
+            videoUrl = signed;
+          } else {
+            // Signing failed — raw URL may be a private bucket path; log for debugging
+            console.warn('[MOVXIO] Signing failed for episode, falling back to raw URL:', videoUrl);
+          }
         }
         initPlayer(film, videoUrl, startEpisode);
         return; // skip movie init below
@@ -3946,7 +3769,11 @@ async function init() {
     if (videoUrl && slugFromUrl(videoUrl)) {
       if (ltEl) ltEl.textContent = 'Preparing stream…';
       const signed = await getSignedUrl(slugFromUrl(videoUrl));
-      if (signed) videoUrl = signed;
+      if (signed) {
+        videoUrl = signed;
+      } else {
+        console.warn('[MOVXIO] Signing failed for film, falling back to raw URL:', videoUrl);
+      }
     }
 
     initPlayer(film, videoUrl);
@@ -4144,10 +3971,13 @@ async function submitReport() {
 })();
 </script>
 
-<!-- ══ ADSTERRA SOCIAL BAR — deferred so it doesn't block render ══ -->
+<!-- ══ ADSTERRA SOCIAL BAR — deferred so it doesn't block render, loaded once only ══ -->
 <script>
 (function() {
+  var _adsterraLoaded = false;
   function loadAdsterra() {
+    if (_adsterraLoaded) return;
+    _adsterraLoaded = true;
     var s = document.createElement('script');
     s.src = 'https://pl29131148.profitablecpmratenetwork.com/44/a4/be/44a4be48a597891bd035368d00eb6745.js';
     s.async = true;
