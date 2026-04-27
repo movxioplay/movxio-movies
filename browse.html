@@ -402,26 +402,26 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 @keyframes shimmer { 0%{background-position:200% 0}100%{background-position:-200% 0} }
 
 /* ── PAGINATION ── */
-.pagination-wrap {
+.load-more-wrap {
   display: flex; align-items: center; justify-content: center;
-  gap: 4px; padding: 28px 0 8px; flex-wrap: wrap;
-  touch-action: manipulation;
+  padding: 28px 0 12px;
 }
-@media (max-width: 767px) { .pagination-wrap { padding-bottom: 24px; } }
-.pg-btn {
-  min-width: 38px; height: 44px; border-radius: 6px;
+.load-more-btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  height: 48px; padding: 0 32px; border-radius: 6px;
   border: 1px solid var(--border); background: var(--surface);
-  color: var(--text-dim); font-family: 'Space Mono', monospace;
-  font-size: 11.5px; cursor: pointer; transition: all 0.15s;
-  display: flex; align-items: center; justify-content: center;
-  padding: 0 14px; gap: 5px; white-space: nowrap;
-  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
-  user-select: none; -webkit-user-select: none;
+  color: var(--text); font-family: 'DM Sans', sans-serif;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: all 0.2s; touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
-.pg-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
-.pg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
-.pg-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
-.pg-ellipsis { color: var(--text-muted); font-family: 'Space Mono', monospace; font-size: 11px; padding: 0 4px; }
+.load-more-btn:hover { border-color: rgba(255,255,255,0.25); background: var(--surface2); }
+.load-more-btn:active { transform: scale(0.98); }
+.lm-count {
+  font-family: 'Space Mono', monospace; font-size: 10px;
+  color: var(--text-muted); background: rgba(255,255,255,0.06);
+  padding: 2px 8px; border-radius: 20px;
+}
 
 /* ── FOOTER ── */
 footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
@@ -688,7 +688,7 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
     <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
     <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
   </div>
-  <div id="paginationWrap" class="pagination-wrap" style="display:none;"></div>
+  <div id="loadMoreWrap" class="load-more-wrap" style="display:none;"></div>
 </div>
 
 <!-- ── FOOTER ── -->
@@ -749,15 +749,9 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
 const SUPABASE_URL = localStorage.getItem('cv_url') || 'https://kncqgatjjcezlnwwikqm.supabase.co';
 const SUPABASE_KEY = localStorage.getItem('cv_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuY3FnYXRqamNlemxud3dpa3FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjUxMzMsImV4cCI6MjA5MDY0MTEzM30.irNGQnC6SlSq2ozVHToq1TnBAs_fKdukJMPmaMB1wyc';
 const PLACEHOLDERS = ['placeholder-1','placeholder-2','placeholder-3','placeholder-4'];
-const ROWS_PER_PAGE = 7; // always show exactly 7 full rows
-
-// Detect how many columns the CSS grid is currently rendering,
-// then return ROWS_PER_PAGE × cols so every page ends on a complete row.
-function getPageSize() {
-  // Derive column count from CSS breakpoints — reliable on all devices
+function getBatchSize() {
   const w = window.innerWidth;
-  const cols = w <= 380 ? 2 : w <= 600 ? 3 : w <= 900 ? 4 : w <= 1200 ? 5 : w <= 1400 ? 6 : 7;
-  return cols * ROWS_PER_PAGE;
+  return w >= 768 ? 56 : 42; // desktop: 56 (~7cols×8rows), mobile: 42 (~3cols×14rows)
 }
 
 // ── DEMO DATA ─────────────────────────────────────────────────
@@ -811,12 +805,11 @@ function cardToggleWl(btn, id) {
 // ── STATE ─────────────────────────────────────────────────────
 let allFilms = [];
 let filteredFilms = [];
-let currentPage = 1;
+let visibleCount = getBatchSize();
 let currentGenre = 'all';
 let isWatchlistMode = false;
 let isFeaturedMode = false;
 let isNewThisWeek  = false;
-let _totalPages = 1;
 
 // ── FILM CARD ─────────────────────────────────────────────────
 function filmCard(film, idx = 0) {
@@ -884,7 +877,6 @@ function setGenreDrop(pill, genre, icon, label) {
   if (genre !== 'all') { badge.textContent = '✓'; badge.classList.add('show'); }
   else { badge.classList.remove('show'); }
   currentGenre = genre;
-  currentPage  = 1;
   closeGenreDropdown();
   updateURL();
   filterFilms();
@@ -946,17 +938,14 @@ function filterFilms() {
     }
   });
 
-  currentPage = 1;
+  visibleCount = getBatchSize();
   renderGrid();
   renderActiveFilters(q, country, year, lang, minRating);
 }
 
 function renderGrid() {
-  const PAGE_SIZE  = getPageSize();
-  const total      = filteredFilms.length;
-  _totalPages = Math.ceil(total / PAGE_SIZE);
-  const start      = (currentPage - 1) * PAGE_SIZE;
-  const page       = filteredFilms.slice(start, start + PAGE_SIZE);
+  const total = filteredFilms.length;
+  const page  = filteredFilms.slice(0, visibleCount);
 
   if (!total) {
     document.getElementById('filmGrid').innerHTML = `
@@ -966,43 +955,30 @@ function renderGrid() {
         <p>${isWatchlistMode ? 'Browse films and tap the bookmark icon to save them.' : 'Try adjusting your search or filters'}</p>
         ${!isWatchlistMode ? '<button onclick="clearAllFilters()">Clear Filters</button>' : ''}
       </div>`;
-    document.getElementById('paginationWrap').style.display = 'none';
+    document.getElementById('loadMoreWrap').style.display = 'none';
     return;
   }
 
   document.getElementById('filmGrid').innerHTML = page.map((f,i) => filmCard(f, i)).join('');
-  renderPagination(_totalPages);
-  if (currentPage > 1) {
-    const grid = document.getElementById('filmGrid');
-    const offset = grid.getBoundingClientRect().top + window.scrollY - 120;
-    window.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+  renderLoadMore(total);
+}
+
+
+function renderLoadMore(total) {
+  const wrap = document.getElementById('loadMoreWrap');
+  if (visibleCount >= total) {
+    wrap.style.display = 'none';
+  } else {
+    wrap.style.display = 'flex';
+    wrap.innerHTML = `<button class="load-more-btn" onclick="loadMore()">Load More <span class="lm-count">${Math.min(getBatchSize(), total - visibleCount)} more</span></button>`;
   }
 }
 
-function renderPagination(totalPages) {
-  const wrap = document.getElementById('paginationWrap');
-  if (totalPages <= 1) { wrap.style.display = 'none'; return; }
-  wrap.style.display = 'flex';
-  const p = currentPage;
-  const show = new Set([1, totalPages]);
-  for (let i = Math.max(1, p - 2); i <= Math.min(totalPages, p + 2); i++) show.add(i);
-  const sorted = [...show].sort((a, b) => a - b);
-  let html = `<button class="pg-btn${p===1?' disabled':''}" data-page="${p-1}">&#8249; Prev</button>`;
-  let prev = 0;
-  for (const n of sorted) {
-    if (n - prev > 1) html += `<span class="pg-ellipsis">&#8230;</span>`;
-    html += `<button class="pg-btn${n===p?' active':''}" data-page="${n}">${n}</button>`;
-    prev = n;
-  }
-  html += `<button class="pg-btn${p===totalPages?' disabled':''}" data-page="${p+1}">Next &#8250;</button>`;
-  wrap.innerHTML = html;
-}
-
-function goPage(n) {
-  if (n < 1 || n > _totalPages) return;
-  currentPage = n;
+function loadMore() {
+  visibleCount += getBatchSize();
   renderGrid();
 }
+
 
 function renderActiveFilters(q, country, year, lang, minRating) {
   const chips = [];
@@ -1047,7 +1023,6 @@ function updateURL() {
 function toggleNewThisWeek() {
   isNewThisWeek = !isNewThisWeek;
   document.getElementById('newWeekChip').classList.toggle('active', isNewThisWeek);
-  currentPage = 1;
   filterFilms();
 }
 
@@ -1110,20 +1085,13 @@ document.addEventListener('click', e => {
   }
 });
 
-// Pagination: event delegation so dynamic buttons work reliably on all mobile browsers
-document.getElementById('paginationWrap').addEventListener('click', function(e) {
-  const btn = e.target.closest('button[data-page]');
-  if (!btn || btn.classList.contains('disabled')) return;
-  const page = parseInt(btn.dataset.page, 10);
-  if (!isNaN(page)) goPage(page);
-});
 
 // Re-render on resize so PAGE_SIZE stays in sync with column count
 let _resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(_resizeTimer);
   _resizeTimer = setTimeout(() => {
-    if (filteredFilms.length) { currentPage = 1; renderGrid(); }
+    if (filteredFilms.length) { visibleCount = getBatchSize(); renderGrid(); }
   }, 200);
 });
 async function init() {
