@@ -822,6 +822,49 @@ nav {
   color: var(--text-muted); padding: 1px 5px; border-radius: 3px;
 }
 
+/* ── EPISODE SELECTOR — full-width below .film-hero ── */
+#episodeSelector {
+  width: 100%;
+}
+
+/* On mobile: taller episode list + bigger tap targets */
+@media (max-width: 600px) {
+  .episode-selector {
+    margin: 8px 0;
+    border-radius: 8px;
+  }
+  .episode-list-wrap {
+    max-height: 320px;
+  }
+  .episode-item {
+    padding: 10px 12px;
+    min-height: 44px;
+  }
+  .ep-thumb-wrap {
+    width: 70px;
+    height: 39px;
+  }
+  .ep-title {
+    font-size: 12.5px;
+  }
+  .ep-num,
+  .ep-dur {
+    font-size: 9px;
+  }
+  .season-tab-btn {
+    padding: 10px 14px;
+    font-size: 12.5px;
+    min-height: 44px;
+  }
+  .next-ep-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 18px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+}
+
 /* ── SKELETON LOADERS ── */
 @keyframes shimmer {
   0%   { background-position: -600px 0; }
@@ -1853,7 +1896,9 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
 
       </div>
 
-      <!-- ══ EPISODE SELECTOR (series only) ══ -->
+    </div>
+
+      <!-- ══ EPISODE SELECTOR (series only) — full-width below poster+details ══ -->
       <div id="episodeSelector" style="display:none; padding: 0 0 16px;">
         <div class="episode-selector">
           <div class="ep-selector-header">
@@ -1874,7 +1919,6 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
         </div>
       </div>
 
-    </div>
   </div>
 
 
