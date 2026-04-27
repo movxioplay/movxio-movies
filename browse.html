@@ -405,14 +405,18 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 .pagination-wrap {
   display: flex; align-items: center; justify-content: center;
   gap: 4px; padding: 28px 0 8px; flex-wrap: wrap;
+  touch-action: manipulation;
 }
+@media (max-width: 767px) { .pagination-wrap { padding-bottom: 24px; } }
 .pg-btn {
-  min-width: 38px; height: 38px; border-radius: 6px;
+  min-width: 38px; height: 44px; border-radius: 6px;
   border: 1px solid var(--border); background: var(--surface);
   color: var(--text-dim); font-family: 'Space Mono', monospace;
   font-size: 11.5px; cursor: pointer; transition: all 0.15s;
   display: flex; align-items: center; justify-content: center;
-  padding: 0 10px; gap: 5px; white-space: nowrap;
+  padding: 0 14px; gap: 5px; white-space: nowrap;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  user-select: none; -webkit-user-select: none;
 }
 .pg-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
 .pg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
@@ -657,14 +661,14 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
     <!-- Filters right -->
     <div class="filters-right">
       <select class="filter-select" id="sortFilter" onchange="filterFilms()">
-        <option value="newest">Newest First</option>
-        <option value="oldest">Oldest First</option>
+        <option value="year_desc">Year ↓ (New First)</option>
+        <option value="newest">Recently Added</option>
+        <option value="oldest">Oldest Added</option>
         <option value="az">A → Z</option>
         <option value="za">Z → A</option>
         <option value="imdb">Top IMDb</option>
         <option value="views">Most Viewed</option>
-        <option value="year_desc">Year ↓</option>
-        <option value="year_asc">Year ↑</option>
+        <option value="year_asc">Year ↑ (Old First)</option>
       </select>
       <button class="new-week-chip" id="newWeekChip" onclick="toggleNewThisWeek()" title="Show films added in the last 7 days">
         <span class="dot"></span>New this week
@@ -750,21 +754,10 @@ const ROWS_PER_PAGE = 7; // always show exactly 7 full rows
 // Detect how many columns the CSS grid is currently rendering,
 // then return ROWS_PER_PAGE × cols so every page ends on a complete row.
 function getPageSize() {
-  const grid = document.getElementById('filmGrid');
-  if (!grid) return 56; // safe fallback before DOM ready
-  const firstCard = grid.querySelector('.film-card');
-  if (!firstCard) {
-    // Grid not yet populated — derive from computed column template
-    const cols = getComputedStyle(grid)
-      .gridTemplateColumns.split(' ').length;
-    return Math.max(cols, 2) * ROWS_PER_PAGE;
-  }
-  const gridLeft  = grid.getBoundingClientRect().left;
-  const cardLeft  = firstCard.getBoundingClientRect().left;
-  const cardWidth = firstCard.getBoundingClientRect().width;
-  const gridWidth = grid.getBoundingClientRect().width;
-  const cols      = Math.round(gridWidth / cardWidth);
-  return Math.max(cols, 2) * ROWS_PER_PAGE;
+  // Derive column count from CSS breakpoints — reliable on all devices
+  const w = window.innerWidth;
+  const cols = w <= 380 ? 2 : w <= 600 ? 3 : w <= 900 ? 4 : w <= 1200 ? 5 : w <= 1400 ? 6 : 7;
+  return cols * ROWS_PER_PAGE;
 }
 
 // ── DEMO DATA ─────────────────────────────────────────────────
@@ -942,14 +935,14 @@ function filterFilms() {
 
   filteredFilms.sort((a, b) => {
     switch(sort) {
+      case 'newest':    return (b.created_at||'') > (a.created_at||'') ? -1 : 1;
       case 'oldest':    return (a.created_at||'') > (b.created_at||'') ? 1 : -1;
       case 'az':        return (a.title||'').localeCompare(b.title||'');
       case 'za':        return (b.title||'').localeCompare(a.title||'');
       case 'imdb':      return (b.imdb_rating||0) - (a.imdb_rating||0);
       case 'views':     return (b.views||0) - (a.views||0);
-      case 'year_desc': return (b.year||0) - (a.year||0);
-      case 'year_asc':  return (a.year||0) - (b.year||0);
-      default:          return (b.created_at||'') > (a.created_at||'') ? 1 : -1;
+      case 'year_asc':  { const yd = (a.year||0) - (b.year||0); return yd !== 0 ? yd : ((b.created_at||'') > (a.created_at||'') ? -1 : 1); }
+      default:          { const yd = (b.year||0) - (a.year||0); return yd !== 0 ? yd : ((b.created_at||'') > (a.created_at||'') ? -1 : 1); }
     }
   });
 
@@ -994,14 +987,14 @@ function renderPagination(totalPages) {
   const show = new Set([1, totalPages]);
   for (let i = Math.max(1, p - 2); i <= Math.min(totalPages, p + 2); i++) show.add(i);
   const sorted = [...show].sort((a, b) => a - b);
-  let html = `<button class="pg-btn${p===1?' disabled':''}" onclick="goPage(${p-1})">‹ Prev</button>`;
+  let html = `<button class="pg-btn${p===1?' disabled':''}" data-page="${p-1}">&#8249; Prev</button>`;
   let prev = 0;
   for (const n of sorted) {
-    if (n - prev > 1) html += `<span class="pg-ellipsis">…</span>`;
-    html += `<button class="pg-btn${n===p?' active':''}" onclick="goPage(${n})">${n}</button>`;
+    if (n - prev > 1) html += `<span class="pg-ellipsis">&#8230;</span>`;
+    html += `<button class="pg-btn${n===p?' active':''}" data-page="${n}">${n}</button>`;
     prev = n;
   }
-  html += `<button class="pg-btn${p===totalPages?' disabled':''}" onclick="goPage(${p+1})">Next ›</button>`;
+  html += `<button class="pg-btn${p===totalPages?' disabled':''}" data-page="${p+1}">Next &#8250;</button>`;
   wrap.innerHTML = html;
 }
 
@@ -1030,7 +1023,7 @@ function clearAllFilters() {
   document.getElementById('countryFilter').value = '';
   document.getElementById('yearFilter').value = '';
   document.getElementById('langFilter').value = '';
-  document.getElementById('sortFilter').value = 'newest';
+  document.getElementById('sortFilter').value = 'year_desc';
   document.getElementById('ratingFilter').value = '0';
   setGenreClear();
 }
@@ -1083,7 +1076,7 @@ function readURL() {
     document.getElementById('searchInput').value = params.get('q');
     document.getElementById('navSearchInput').value = params.get('q');
   }
-  if (params.get('sort') === 'latest') document.getElementById('sortFilter').value = 'newest';
+  if (params.get('sort') === 'latest') document.getElementById('sortFilter').value = 'year_desc';
   if (params.get('featured') === 'true') isFeaturedMode = true;
 }
 
@@ -1115,6 +1108,14 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.genre-dropdown-btn') && !e.target.closest('.genre-dropdown-panel')) {
     closeGenreDropdown();
   }
+});
+
+// Pagination: event delegation so dynamic buttons work reliably on all mobile browsers
+document.getElementById('paginationWrap').addEventListener('click', function(e) {
+  const btn = e.target.closest('button[data-page]');
+  if (!btn || btn.classList.contains('disabled')) return;
+  const page = parseInt(btn.dataset.page, 10);
+  if (!isNaN(page)) goPage(page);
 });
 
 // Re-render on resize so PAGE_SIZE stays in sync with column count
