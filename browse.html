@@ -275,7 +275,7 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
   max-width: 1400px; margin: 0 auto;
   padding: 16px 16px 80px;
 }
-@media (max-width: 600px) { .content-area { padding: 12px 10px 80px; } }
+@media (max-width: 600px) { .content-area { padding: 12px 10px 140px; } }
 
 /* ── FILM GRID ── */
 .film-grid {
@@ -405,6 +405,9 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 .load-more-wrap {
   display: flex; align-items: center; justify-content: center;
   padding: 28px 0 12px;
+}
+@media (max-width: 767px) {
+  .load-more-wrap { padding-bottom: 32px; }
 }
 .load-more-btn {
   display: inline-flex; align-items: center; gap: 10px;
@@ -688,7 +691,9 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
     <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
     <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
   </div>
-  <div id="loadMoreWrap" class="load-more-wrap" style="display:none;"></div>
+  <div id="loadMoreWrap" class="load-more-wrap" style="display:none;">
+    <button id="loadMoreBtn" class="load-more-btn">Load More <span id="lmCount" class="lm-count"></span></button>
+  </div>
 </div>
 
 <!-- ── FOOTER ── -->
@@ -972,7 +977,7 @@ function renderLoadMore(total) {
     wrap.style.display = 'none';
   } else {
     wrap.style.display = 'flex';
-    wrap.innerHTML = `<button class="load-more-btn" onclick="loadMore()">Load More <span class="lm-count">${Math.min(getBatchSize(), total - visibleCount)} more</span></button>`;
+    document.getElementById('lmCount').textContent = Math.min(getBatchSize(), total - visibleCount) + ' more';
   }
 }
 
@@ -1099,6 +1104,11 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.genre-dropdown-btn') && !e.target.closest('.genre-dropdown-panel')) {
     closeGenreDropdown();
   }
+});
+
+// Load More — static button, event delegation, works on all mobile browsers
+document.getElementById('loadMoreBtn').addEventListener('click', function() {
+  loadMore();
 });
 
 
