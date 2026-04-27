@@ -805,7 +805,7 @@ function cardToggleWl(btn, id) {
 // ── STATE ─────────────────────────────────────────────────────
 let allFilms = [];
 let filteredFilms = [];
-let visibleCount = getBatchSize();
+let visibleCount = 0;
 let currentGenre = 'all';
 let isWatchlistMode = false;
 let isFeaturedMode = false;
@@ -944,11 +944,12 @@ function filterFilms() {
 }
 
 function renderGrid() {
+  // Full re-render (called on filter/sort change) — resets scroll to top
   const total = filteredFilms.length;
-  const page  = filteredFilms.slice(0, visibleCount);
+  const grid  = document.getElementById('filmGrid');
 
   if (!total) {
-    document.getElementById('filmGrid').innerHTML = `
+    grid.innerHTML = `
       <div class="empty-state">
         <div class="icon">🎬</div>
         <h3>${isWatchlistMode ? 'Your watchlist is empty' : 'No films found'}</h3>
@@ -959,7 +960,8 @@ function renderGrid() {
     return;
   }
 
-  document.getElementById('filmGrid').innerHTML = page.map((f,i) => filmCard(f, i)).join('');
+  const batch = filteredFilms.slice(0, visibleCount);
+  grid.innerHTML = batch.map((f, i) => filmCard(f, i)).join('');
   renderLoadMore(total);
 }
 
@@ -975,8 +977,22 @@ function renderLoadMore(total) {
 }
 
 function loadMore() {
-  visibleCount += getBatchSize();
-  renderGrid();
+  // Append-only: inject only new cards, never touch existing DOM
+  const total    = filteredFilms.length;
+  const prevCount = visibleCount;
+  visibleCount   += getBatchSize();
+  const newCards  = filteredFilms.slice(prevCount, visibleCount);
+  if (!newCards.length) return;
+
+  const grid = document.getElementById('filmGrid');
+  const frag = document.createDocumentFragment();
+  newCards.forEach((f, i) => {
+    const div = document.createElement('div');
+    div.innerHTML = filmCard(f, prevCount + i);
+    frag.appendChild(div.firstElementChild);
+  });
+  grid.appendChild(frag);
+  renderLoadMore(total);
 }
 
 
