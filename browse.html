@@ -275,7 +275,7 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
   max-width: 1400px; margin: 0 auto;
   padding: 16px 16px 80px;
 }
-@media (max-width: 600px) { .content-area { padding: 12px 10px 80px; } }
+@media (max-width: 600px) { .content-area { padding: 12px 10px 120px; } }
 
 /* ── FILM GRID ── */
 .film-grid {
@@ -417,6 +417,7 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 .pg-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
 .pg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
 .pg-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+@media (max-width: 767px) { .pagination-wrap { padding-bottom: 24px; } }
 .pg-ellipsis { color: var(--text-muted); font-family: 'Space Mono', monospace; font-size: 11px; padding: 0 4px; }
 
 /* ── FOOTER ── */
