@@ -275,7 +275,7 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
   max-width: 1400px; margin: 0 auto;
   padding: 16px 16px 80px;
 }
-@media (max-width: 600px) { .content-area { padding: 12px 10px 120px; } }
+@media (max-width: 600px) { .content-area { padding: 12px 10px 80px; } }
 
 /* ── FILM GRID ── */
 .film-grid {
@@ -417,7 +417,6 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 .pg-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
 .pg-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
 .pg-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
-@media (max-width: 767px) { .pagination-wrap { padding-bottom: 24px; } }
 .pg-ellipsis { color: var(--text-muted); font-family: 'Space Mono', monospace; font-size: 11px; padding: 0 4px; }
 
 /* ── FOOTER ── */
@@ -824,6 +823,7 @@ let currentGenre = 'all';
 let isWatchlistMode = false;
 let isFeaturedMode = false;
 let isNewThisWeek  = false;
+let _totalPages = 1;
 
 // ── FILM CARD ─────────────────────────────────────────────────
 function filmCard(film, idx = 0) {
@@ -961,7 +961,7 @@ function filterFilms() {
 function renderGrid() {
   const PAGE_SIZE  = getPageSize();
   const total      = filteredFilms.length;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  _totalPages = Math.ceil(total / PAGE_SIZE);
   const start      = (currentPage - 1) * PAGE_SIZE;
   const page       = filteredFilms.slice(start, start + PAGE_SIZE);
 
@@ -978,8 +978,12 @@ function renderGrid() {
   }
 
   document.getElementById('filmGrid').innerHTML = page.map((f,i) => filmCard(f, i)).join('');
-  renderPagination(totalPages);
-  if (currentPage > 1) document.getElementById('filmGrid').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  renderPagination(_totalPages);
+  if (currentPage > 1) {
+    const grid = document.getElementById('filmGrid');
+    const offset = grid.getBoundingClientRect().top + window.scrollY - 120;
+    window.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+  }
 }
 
 function renderPagination(totalPages) {
@@ -1002,9 +1006,7 @@ function renderPagination(totalPages) {
 }
 
 function goPage(n) {
-  const PAGE_SIZE  = getPageSize();
-  const totalPages = Math.ceil(filteredFilms.length / PAGE_SIZE);
-  if (n < 1 || n > totalPages) return;
+  if (n < 1 || n > _totalPages) return;
   currentPage = n;
   renderGrid();
 }
