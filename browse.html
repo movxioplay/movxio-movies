@@ -1160,7 +1160,7 @@ function trackAndGo(id, slug) {
   let hist = JSON.parse(localStorage.getItem('mvx_history')||'[]');
   hist = [id, ...hist.filter(i=>i!==id)].slice(0,30);
   localStorage.setItem('mvx_history', JSON.stringify(hist));
-  window.location.href = slug ? `watch.html?slug=${slug}` : `watch.html?id=${id}`;
+  window.location.href = slug ? `/film/${slug}` : `/film/${id}`;
 }
 
 // ── GENRE ─────────────────────────────────────────────────────
