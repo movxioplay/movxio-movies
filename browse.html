@@ -872,20 +872,22 @@ function buildQuery(page) {
   }
 
   // Escape special chars that break Supabase ilike filters
-  function sbEsc(v) { return v.replace(/\\/g,'\\\\').replace(/%/g,'\\%').replace(/\*/g,'\\*').replace(/\(/g,'\\(').replace(/\)/g,'\\)'); }
+  function sbEsc(v) { return v.replace(/%/g,'\%').replace(/\*/g,'\*'); }
+
+  // Supabase OR filter must be appended as a raw string: or=(col.ilike.*x*,col2.ilike.*x*)
+  // URLSearchParams would double-encode the parens, so we track it separately
+  let orFilter = null;
 
   if (q && !actor) {
-    // full-text across multiple columns — only when actor box is empty to avoid conflict
     const qe = sbEsc(q);
-    params.set('or', `title.ilike.*${qe}*,description.ilike.*${qe}*,director.ilike.*${qe}*,actors.ilike.*${qe}*`);
+    orFilter = `(title.ilike.*${qe}*,description.ilike.*${qe}*,director.ilike.*${qe}*,actors.ilike.*${qe}*)`;
   } else if (q && actor) {
-    // both set: search title/description/director only (actor filter handles actors)
     const qe = sbEsc(q);
-    params.set('or', `title.ilike.*${qe}*,description.ilike.*${qe}*,director.ilike.*${qe}*`);
+    orFilter = `(title.ilike.*${qe}*,description.ilike.*${qe}*,director.ilike.*${qe}*)`;
   }
 
   if (actor) {
-    // dedicated actors-only filter — no conflict with or= block
+    // actors column contains comma-separated names — ilike partial match
     params.set('actors', `ilike.*${sbEsc(actor)}*`);
   }
 
@@ -917,7 +919,8 @@ function buildQuery(page) {
   params.set('limit',  ps);
   params.set('offset', offset);
 
-  return `${SUPABASE_URL}/rest/v1/films?${params.toString()}`;
+  const base = `${SUPABASE_URL}/rest/v1/films?${params.toString()}`;
+  return orFilter ? `${base}&or=${orFilter}` : base;
 }
 
 // ── FETCH FROM SUPABASE ────────────────────────────────────────
@@ -953,17 +956,32 @@ async function fetchPage(page) {
 
     const films = await res.json();
 
-    // If Supabase returned empty AND we're on page 1 with no filters, fall back to demo
     if (!films.length && page === 1 && !hasActiveFilters()) {
+      // True empty DB with no filters — show demo cards so page isn't blank
       totalCount = DEMO.length;
       renderGrid(DEMO);
     } else {
+      // Real results (or genuine empty search) — never inject demo cards
       renderGrid(films);
     }
   } catch (err) {
-    console.warn('Supabase fetch failed, using demo data', err);
-    totalCount = DEMO.length;
-    renderGrid(DEMO);
+    console.warn('Supabase fetch failed', err);
+    if (!hasActiveFilters()) {
+      // Only show demo cards on true first load with no filters
+      totalCount = DEMO.length;
+      renderGrid(DEMO);
+    } else {
+      // User is searching/filtering — show error, not fake cards
+      totalCount = 0;
+      document.getElementById('filmGrid').innerHTML = `
+        <div class="empty-state">
+          <div class="icon">⚠️</div>
+          <h3>Connection error</h3>
+          <p>Could not reach the server. Please check your connection and try again.</p>
+          <button onclick="fetchPage(${page})">Retry</button>
+        </div>`;
+      document.getElementById('paginationWrap').style.display = 'none';
+    }
   } finally {
     isLoading = false;
   }
