@@ -1130,14 +1130,14 @@ function filmCard(film, idx) {
   const cType = contentType(film);
   const typeClass = cType==='TV'?'tv':'movie';
   return `
-  <div class="film-card" onclick="trackAndGo('${esc(film.id)}','${esc(film.slug||'')}')">
+  <div class="film-card" data-id="${esc(film.id)}" data-slug="${esc(film.slug||'')}">
     <div class="card-thumb">
       ${thumb}
       ${film.imdb_rating?`<div class="card-rating"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>${film.imdb_rating}</div>`:''}
       <div class="card-type ${typeClass}">${cType}</div>
       ${film.badge?`<div class="card-badge ${badgeClass}">${esc(film.badge)}</div>`:''}
       <div class="card-overlay"><div class="card-play"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6V2z"/></svg></div></div>
-      <button class="card-wl-btn ${saved?'saved':''}" onclick="event.stopPropagation();cardToggleWl(this,'${esc(film.id)}')" title="${saved?'Remove from watchlist':'Add to watchlist'}">
+      <button class="card-wl-btn ${saved?'saved':''}" data-wl-id="${esc(film.id)}" title="${saved?'Remove from watchlist':'Add to watchlist'}">
         <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
       </button>
     </div>
@@ -1149,7 +1149,7 @@ function filmCard(film, idx) {
       </div>
       ${film.actors ? `<div class="card-actors">${
         film.actors.split(',').slice(0,2).map(a=>a.trim()).filter(Boolean).map(a=>
-          `<span class="card-actor-tag" onclick="event.stopPropagation();filterByActor('${esc(a)}')" title="Filter by ${esc(a)}">${esc(a)}</span>`
+          `<span class="card-actor-tag" data-actor="${esc(a)}" title="Filter by ${esc(a)}">${esc(a)}</span>`
         ).join('')
       }</div>` : ''}
     </div>
@@ -1293,14 +1293,44 @@ function toggleMenu() {
 }
 
 document.addEventListener('click', e => {
+  // ── Mobile nav close ──
   const nav = document.getElementById('mobileNav');
   if (nav && nav.classList.contains('open') && !nav.contains(e.target) && !e.target.closest('.hamburger')) {
     nav.classList.remove('open');
     document.querySelector('.hamburger').classList.remove('open');
     document.body.style.overflow = '';
   }
+
+  // ── Genre dropdown close ──
   if (!e.target.closest('.genre-dropdown-btn') && !e.target.closest('.genre-dropdown-panel')) {
     closeGenreDropdown();
+  }
+
+  // ── Watchlist button ──
+  const wlBtn = e.target.closest('.card-wl-btn');
+  if (wlBtn) {
+    e.stopPropagation();
+    const id = wlBtn.dataset.wlId;
+    if (id) cardToggleWl(wlBtn, id);
+    return;
+  }
+
+  // ── Actor tag click ──
+  const actorTag = e.target.closest('.card-actor-tag');
+  if (actorTag) {
+    e.stopPropagation();
+    const actor = actorTag.dataset.actor;
+    if (actor) filterByActor(actor);
+    return;
+  }
+
+  // ── Film card click — use data-id/data-slug, never inline onclick ──
+  const card = e.target.closest('.film-card');
+  if (card) {
+    const id   = card.dataset.id;
+    const slug = card.dataset.slug;
+    if (id) trackAndGo(id, slug);
+    return;
   }
 });
 
