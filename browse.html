@@ -402,28 +402,42 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
 @keyframes shimmer { 0%{background-position:200% 0}100%{background-position:-200% 0} }
 
 /* ── PAGINATION ── */
-.load-more-wrap {
+.pagination-wrap {
   display: flex; align-items: center; justify-content: center;
-  padding: 28px 0 12px;
+  flex-wrap: wrap; gap: 6px;
+  padding: 32px 0 16px;
 }
 @media (max-width: 767px) {
-  .load-more-wrap { padding-bottom: 32px; }
+  .pagination-wrap { padding-bottom: 36px; gap: 4px; }
 }
-.load-more-btn {
-  display: inline-flex; align-items: center; gap: 10px;
-  height: 48px; padding: 0 32px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--surface);
-  color: var(--text); font-family: 'DM Sans', sans-serif;
-  font-size: 14px; font-weight: 600; cursor: pointer;
-  transition: all 0.2s; touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
+.pg-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 38px; height: 38px; padding: 0 6px;
+  border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-dim);
+  font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700;
+  cursor: pointer; transition: all 0.15s;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
-.load-more-btn:hover { border-color: rgba(255,255,255,0.25); background: var(--surface2); }
-.load-more-btn:active { transform: scale(0.98); }
-.lm-count {
-  font-family: 'Space Mono', monospace; font-size: 10px;
-  color: var(--text-muted); background: rgba(255,255,255,0.06);
-  padding: 2px 8px; border-radius: 20px;
+.pg-btn:hover { border-color: rgba(255,255,255,0.22); color: var(--text); background: var(--surface2); }
+.pg-btn:active { transform: scale(0.95); }
+.pg-btn.active {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; cursor: default;
+}
+.pg-btn.disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+.pg-btn.pg-prev, .pg-btn.pg-next { gap: 5px; padding: 0 14px; font-size: 11px; font-family: 'DM Sans', sans-serif; font-weight: 600; }
+.pg-ellipsis {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 32px; height: 38px; color: var(--text-muted);
+  font-family: 'Space Mono', monospace; font-size: 12px; user-select: none;
+}
+.pg-info {
+  width: 100%; text-align: center;
+  font-family: 'Space Mono', monospace; font-size: 9px;
+  color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase;
+  margin-top: 4px;
 }
 
 /* ── FOOTER ── */
@@ -608,7 +622,7 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
     <!-- Search -->
     <div class="search-box">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input type="text" id="searchInput" placeholder="Search titles, directors, actors..." oninput="filterFilms()" autocomplete="off" spellcheck="false">
+      <input type="text" id="searchInput" placeholder="Search titles, directors, actors..." oninput="onSearchInput()" autocomplete="off" spellcheck="false">
     </div>
 
     <!-- Year -->
@@ -691,9 +705,7 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
     <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
     <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
   </div>
-  <div id="loadMoreWrap" class="load-more-wrap" style="display:none;">
-    <button id="loadMoreBtn" class="load-more-btn">Load More <span id="lmCount" class="lm-count"></span></button>
-  </div>
+  <div id="paginationWrap" class="pagination-wrap" style="display:none;"></div>
 </div>
 
 <!-- ── FOOTER ── -->
@@ -753,29 +765,25 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
 // ── CONFIG ────────────────────────────────────────────────────
 const SUPABASE_URL = localStorage.getItem('cv_url') || 'https://kncqgatjjcezlnwwikqm.supabase.co';
 const SUPABASE_KEY = localStorage.getItem('cv_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuY3FnYXRqamNlemxud3dpa3FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjUxMzMsImV4cCI6MjA5MDY0MTEzM30.irNGQnC6SlSq2ozVHToq1TnBAs_fKdukJMPmaMB1wyc';
+const FIELDS = 'id,title,year,genre,thumbnail_url,imdb_rating,badge,views,country,duration_secs,language,featured,created_at,status,slug';
 const PLACEHOLDERS = ['placeholder-1','placeholder-2','placeholder-3','placeholder-4'];
-function getBatchSize() {
-  const w = window.innerWidth;
-  return w >= 768 ? 56 : 42; // desktop: 56 (~7cols×8rows), mobile: 42 (~3cols×14rows)
-}
 
-// ── DEMO DATA ─────────────────────────────────────────────────
+// ── DEMO DATA (fallback when Supabase unavailable) ────────────
 const DEMO = [
-  { id:'demo1', title:'The Open Road',   year:2023, genre:'drama',       language:'English', country:'United States', featured:true,  status:'active', thumbnail_url:'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=400&q=80', description:'A road trip that changes everything.', hls_url:null, subtitles:[], views:142, imdb_rating:7.2 },
-  { id:'demo2', title:'City Lights',     year:2022, genre:'romance',     language:'English', country:'United Kingdom',featured:true,  status:'active', thumbnail_url:'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=400&q=80', description:'Love found in unexpected places.',     hls_url:null, subtitles:[], views:98,  imdb_rating:6.8 },
-  { id:'demo3', title:'Deep Waters',     year:2023, genre:'thriller',    language:'English', country:'United States', featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1518929458119-e5bf444c30f4?w=400&q=80', description:'Nothing is as it seems.',             hls_url:null, subtitles:[], views:210, imdb_rating:7.8 },
-  { id:'demo4', title:'Into The Wild',   year:2021, genre:'documentary', language:'English', country:'Canada',        featured:true,  status:'active', thumbnail_url:'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400&q=80', description:'Nature at its most raw.',             hls_url:null, subtitles:[], views:54,  imdb_rating:8.1 },
-  { id:'demo5', title:'Neon Nights',     year:2022, genre:'action',      language:'English', country:'United States', featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1524712245354-2c4e5e7121c0?w=400&q=80', description:'The city never sleeps.',             hls_url:null, subtitles:[], views:305, badge:'Hot', imdb_rating:6.5 },
-  { id:'demo6', title:'The Last Summit', year:2023, genre:'action',      language:'English', country:'New Zealand',   featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400&q=80', description:'Every step could be the last.',      hls_url:null, subtitles:[], views:77,  badge:'New', imdb_rating:7.0 },
-  { id:'demo7', title:'Laughter Club',   year:2022, genre:'comedy',      language:'English', country:'Australia',     featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=400&q=80', description:'Life is better with laughter.',      hls_url:null, subtitles:[], views:188 },
-  { id:'demo8', title:'Midnight Fear',   year:2023, genre:'horror',      language:'English', country:'United States', featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1509248961158-e54f6934749c?w=400&q=80', description:'The dark hides more than shadows.',   hls_url:null, subtitles:[], views:421, badge:'Classic', imdb_rating:7.4 },
+  { id:'demo1', title:'The Open Road',   year:2023, genre:'drama',       language:'English', country:'United States', featured:true,  status:'active', thumbnail_url:'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=400&q=80', views:142, imdb_rating:7.2 },
+  { id:'demo2', title:'City Lights',     year:2022, genre:'romance',     language:'English', country:'United Kingdom',featured:true,  status:'active', thumbnail_url:'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=400&q=80', views:98,  imdb_rating:6.8 },
+  { id:'demo3', title:'Deep Waters',     year:2023, genre:'thriller',    language:'English', country:'United States', featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1518929458119-e5bf444c30f4?w=400&q=80', views:210, imdb_rating:7.8 },
+  { id:'demo4', title:'Into The Wild',   year:2021, genre:'documentary', language:'English', country:'Canada',        featured:true,  status:'active', thumbnail_url:'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400&q=80', views:54,  imdb_rating:8.1 },
+  { id:'demo5', title:'Neon Nights',     year:2022, genre:'action',      language:'English', country:'United States', featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1524712245354-2c4e5e7121c0?w=400&q=80', views:305, badge:'Hot', imdb_rating:6.5 },
+  { id:'demo6', title:'The Last Summit', year:2023, genre:'action',      language:'English', country:'New Zealand',   featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400&q=80', views:77,  badge:'New', imdb_rating:7.0 },
+  { id:'demo7', title:'Laughter Club',   year:2022, genre:'comedy',      language:'English', country:'Australia',     featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=400&q=80', views:188 },
+  { id:'demo8', title:'Midnight Fear',   year:2023, genre:'horror',      language:'English', country:'United States', featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1509248961158-e54f6934749c?w=400&q=80', views:421, badge:'Classic', imdb_rating:7.4 },
 ];
 
 // ── UTILS ─────────────────────────────────────────────────────
 function esc(s) { if(!s)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function formatDur(s) { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; }
 
-// Determine content type label
 function contentType(film) {
   const g = (film.genre||'').toLowerCase();
   if (g.includes('tv-show') || g.includes('sitcom') || g.includes('tv show')) return 'TV';
@@ -798,48 +806,285 @@ function toggleWatchlistItem(id) {
 function clearWatchlist() {
   if (!confirm('Clear your entire watchlist?')) return;
   setWatchlist([]);
-  filterFilms();
+  fetchAndRender();
 }
 function cardToggleWl(btn, id) {
   const saved = toggleWatchlistItem(id);
   btn.classList.toggle('saved', saved);
   btn.title = saved ? 'Remove from watchlist' : 'Add to watchlist';
-  if (isWatchlistMode) filterFilms();
+  if (isWatchlistMode) fetchAndRender();
 }
 
 // ── STATE ─────────────────────────────────────────────────────
-let allFilms = [];
-let filteredFilms = [];
-let visibleCount = 0;
-let currentGenre = 'all';
+let currentPage    = 1;
+let totalCount     = 0;       // total rows matching current query (from Content-Range)
+let currentGenre   = 'all';
 let isWatchlistMode = false;
-let isFeaturedMode = false;
-let isNewThisWeek  = false;
+let isFeaturedMode  = false;
+let isNewThisWeek   = false;
+let isLoading       = false;
+let _searchTimer    = null;   // debounce handle
+
+function getPageSize() { return window.innerWidth >= 768 ? 56 : 42; }
+function totalPages()  { return Math.max(1, Math.ceil(totalCount / getPageSize())); }
+
+// ── BUILD SUPABASE QUERY URL ───────────────────────────────────
+function buildQuery(page) {
+  const q         = document.getElementById('searchInput').value.trim();
+  const country   = document.getElementById('countryFilter').value;
+  const year      = document.getElementById('yearFilter').value;
+  const lang      = document.getElementById('langFilter').value;
+  const sort      = document.getElementById('sortFilter').value;
+  const minRating = parseFloat(document.getElementById('ratingFilter').value) || 0;
+  const ps        = getPageSize();
+  const offset    = (page - 1) * ps;
+
+  const params = new URLSearchParams();
+  params.set('select', FIELDS);
+
+  // ── filters ──
+  params.set('status', 'eq.active');
+
+  if (isWatchlistMode) {
+    const wl = getWatchlist();
+    if (!wl.length) return null;                      // empty watchlist — skip fetch
+    params.set('id', `in.(${wl.join(',')})`);
+  } else if (isFeaturedMode) {
+    params.set('featured', 'eq.true');
+  } else if (isNewThisWeek) {
+    const since = new Date(Date.now() - 7*24*60*60*1000).toISOString();
+    params.set('created_at', `gte.${since}`);
+  }
+
+  if (currentGenre !== 'all') {
+    // genre is stored as comma-separated string — use ilike for partial match
+    params.set('genre', `ilike.*${currentGenre}*`);
+  }
+
+  if (q) {
+    // full-text style: search title OR description OR director OR actors
+    // Supabase OR filter syntax
+    params.set('or', `title.ilike.*${encodeURIComponent(q)}*,description.ilike.*${encodeURIComponent(q)}*,director.ilike.*${encodeURIComponent(q)}*,actors.ilike.*${encodeURIComponent(q)}*`);
+  }
+
+  if (country) params.set('country', `ilike.*${country}*`);
+
+  if (year === 'older') {
+    params.set('year', 'lt.2018');
+  } else if (year) {
+    params.set('year', `eq.${year}`);
+  }
+
+  if (lang) params.set('language', `ilike.${lang}`);
+  if (minRating) params.set('imdb_rating', `gte.${minRating}`);
+
+  // ── sort ──
+  const sortMap = {
+    year_desc: 'year.desc,created_at.desc',
+    year_asc:  'year.asc,created_at.desc',
+    newest:    'created_at.desc',
+    oldest:    'created_at.asc',
+    az:        'title.asc',
+    za:        'title.desc',
+    imdb:      'imdb_rating.desc',
+    views:     'views.desc',
+  };
+  params.set('order', sortMap[sort] || 'year.desc,created_at.desc');
+
+  // ── pagination ──
+  params.set('limit',  ps);
+  params.set('offset', offset);
+
+  return `${SUPABASE_URL}/rest/v1/films?${params.toString()}`;
+}
+
+// ── FETCH FROM SUPABASE ────────────────────────────────────────
+async function fetchPage(page) {
+  const url = buildQuery(page);
+
+  // Watchlist mode with empty list — show empty state immediately
+  if (url === null) {
+    totalCount = 0;
+    renderGrid([]);
+    renderActiveFilters();
+    return;
+  }
+
+  showSkeleton();
+  isLoading = true;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Prefer': 'count=exact',           // ask Supabase for total row count
+      }
+    });
+
+    if (!res.ok) throw new Error('fetch failed');
+
+    // Parse total count from Content-Range: 0-55/3421
+    const cr = res.headers.get('Content-Range') || '';
+    const match = cr.match(/\/([0-9]+)/);
+    totalCount = match ? parseInt(match[1], 10) : 0;
+
+    const films = await res.json();
+
+    // If Supabase returned empty AND we're on page 1 with no filters, fall back to demo
+    if (!films.length && page === 1 && !hasActiveFilters()) {
+      totalCount = DEMO.length;
+      renderGrid(DEMO);
+    } else {
+      renderGrid(films);
+    }
+  } catch (err) {
+    console.warn('Supabase fetch failed, using demo data', err);
+    totalCount = DEMO.length;
+    renderGrid(DEMO);
+  } finally {
+    isLoading = false;
+  }
+
+  renderActiveFilters();
+}
+
+function hasActiveFilters() {
+  const q       = document.getElementById('searchInput').value.trim();
+  const country = document.getElementById('countryFilter').value;
+  const year    = document.getElementById('yearFilter').value;
+  const lang    = document.getElementById('langFilter').value;
+  const minRating = parseFloat(document.getElementById('ratingFilter').value) || 0;
+  return !!(q || country || year || lang || minRating || currentGenre !== 'all' || isNewThisWeek || isWatchlistMode || isFeaturedMode);
+}
+
+// ── TRIGGER FETCH (called by all filter/sort/page changes) ─────
+function filterFilms() {
+  currentPage = 1;
+  fetchPage(1);
+  updateURL();
+}
+
+function goToPage(p) {
+  if (isLoading) return;
+  currentPage = Math.max(1, Math.min(p, totalPages()));
+  fetchPage(currentPage);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── DEBOUNCED SEARCH (so we don't fire on every keystroke) ─────
+function onSearchInput() {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => { filterFilms(); }, 350);
+}
+
+// ── RENDER ────────────────────────────────────────────────────
+function showSkeleton() {
+  const ps = getPageSize();
+  document.getElementById('filmGrid').innerHTML =
+    Array(Math.min(ps, 24)).fill(0).map(() => `<div class="skeleton"></div>`).join('');
+  document.getElementById('paginationWrap').style.display = 'none';
+}
+
+function renderGrid(films) {
+  const grid = document.getElementById('filmGrid');
+  const wrap = document.getElementById('paginationWrap');
+
+  if (!films.length) {
+    grid.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🎬</div>
+        <h3>${isWatchlistMode ? 'Your watchlist is empty' : 'No films found'}</h3>
+        <p>${isWatchlistMode ? 'Browse films and tap the bookmark icon to save them.' : 'Try adjusting your search or filters'}</p>
+        ${!isWatchlistMode ? '<button onclick="clearAllFilters()">Clear Filters</button>' : ''}
+      </div>`;
+    wrap.style.display = 'none';
+    return;
+  }
+
+  const offset = (currentPage - 1) * getPageSize();
+  grid.innerHTML = films.map((f, i) => filmCard(f, offset + i)).join('');
+  renderPagination();
+}
+
+function renderPagination() {
+  const wrap = document.getElementById('paginationWrap');
+  const tp   = totalPages();
+  const cp   = currentPage;
+  const ps   = getPageSize();
+
+  if (tp <= 1) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+
+  const from = (cp - 1) * ps + 1;
+  const to   = Math.min(cp * ps, totalCount);
+
+  function pageNums(cur, last) {
+    const range = [];
+    for (let i = Math.max(2, cur - 1); i <= Math.min(last - 1, cur + 1); i++) range.push(i);
+    if (range[0] - 2 > 1) range.unshift('..l'); else if (range[0] - 1 === 2) range.unshift(2);
+    if (last - range[range.length - 1] > 2) range.push('..r'); else if (last - range[range.length - 1] === 2) range.push(last - 1);
+    return [1, ...range, last];
+  }
+
+  const nums = tp > 1 ? pageNums(cp, tp) : [1];
+  let html = '';
+
+  html += `<button class="pg-btn pg-prev${cp===1?' disabled':''}" ${cp===1?'disabled':''} onclick="goToPage(${cp-1})">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>Prev</button>`;
+
+  nums.forEach(n => {
+    if (n === '..l' || n === '..r') html += `<span class="pg-ellipsis">…</span>`;
+    else html += `<button class="pg-btn${n===cp?' active':''}" onclick="goToPage(${n})">${n}</button>`;
+  });
+
+  html += `<button class="pg-btn pg-next${cp===tp?' disabled':''}" ${cp===tp?'disabled':''} onclick="goToPage(${cp+1})">
+    Next<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></button>`;
+
+  html += `<div class="pg-info">${from}–${to} of ${totalCount} films · page ${cp} of ${tp}</div>`;
+  wrap.innerHTML = html;
+}
+
+function renderActiveFilters() {
+  const q         = document.getElementById('searchInput').value.trim();
+  const country   = document.getElementById('countryFilter').value;
+  const year      = document.getElementById('yearFilter').value;
+  const lang      = document.getElementById('langFilter').value;
+  const minRating = parseFloat(document.getElementById('ratingFilter').value) || 0;
+  const chips = [];
+  if (currentGenre !== 'all') chips.push({ label: `Genre: ${currentGenre}`, action: "setGenreClear()" });
+  if (isNewThisWeek)  chips.push({ label: 'New this week',          action: "toggleNewThisWeek()" });
+  if (q)              chips.push({ label: `"${q}"`,                 action: "clearSearch()" });
+  if (country)        chips.push({ label: country,                  action: "clearCountry()" });
+  if (year)           chips.push({ label: year==='older'?'Before 2018':year, action: "clearYear()" });
+  if (lang)           chips.push({ label: lang,                     action: "clearLang()" });
+  if (minRating)      chips.push({ label: `${minRating}+ ★`,        action: "clearRating()" });
+  document.getElementById('activeFilters').innerHTML = chips.map(c =>
+    `<button class="filter-chip" onclick="${c.action}">${esc(c.label)} <span class="x">×</span></button>`
+  ).join('');
+}
 
 // ── FILM CARD ─────────────────────────────────────────────────
-function filmCard(film, idx = 0) {
+function filmCard(film, idx) {
+  idx = idx || 0;
   const ph = PLACEHOLDERS[idx % 4];
   const thumb = film.thumbnail_url
     ? `<img src="${esc(film.thumbnail_url)}" alt="${esc(film.title)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'card-thumb-placeholder ${ph}\\'><span class=\\'placeholder-icon\\'>🎬</span></div>'">`
     : `<div class="card-thumb-placeholder ${ph}"><span class="placeholder-icon">🎬</span></div>`;
-
   const genres = (film.genre||'').split(',').map(g=>g.trim()).filter(Boolean);
   const primaryGenre = genres[0] || '';
-  const badgeClass = film.badge === 'New' ? 'new' : film.badge === 'Classic' ? 'classic' : film.badge === 'Coming Soon' ? 'coming' : '';
+  const badgeClass = film.badge==='New'?'new':film.badge==='Classic'?'classic':film.badge==='Coming Soon'?'coming':'';
   const saved = isInWatchlist(film.id);
   const cType = contentType(film);
-  const typeClass = cType === 'TV' ? 'tv' : 'movie';
-
+  const typeClass = cType==='TV'?'tv':'movie';
   return `
   <div class="film-card" onclick="trackAndGo('${esc(film.id)}')">
     <div class="card-thumb">
       ${thumb}
-      ${film.imdb_rating ? `<div class="card-rating"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>${film.imdb_rating}</div>` : ''}
+      ${film.imdb_rating?`<div class="card-rating"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>${film.imdb_rating}</div>`:''}
       <div class="card-type ${typeClass}">${cType}</div>
-      ${film.badge ? `<div class="card-badge ${badgeClass}">${esc(film.badge)}</div>` : ''}
-      <div class="card-overlay">
-        <div class="card-play"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6V2z"/></svg></div>
-      </div>
+      ${film.badge?`<div class="card-badge ${badgeClass}">${esc(film.badge)}</div>`:''}
+      <div class="card-overlay"><div class="card-play"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6V2z"/></svg></div></div>
       <button class="card-wl-btn ${saved?'saved':''}" onclick="event.stopPropagation();cardToggleWl(this,'${esc(film.id)}')" title="${saved?'Remove from watchlist':'Add to watchlist'}">
         <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
       </button>
@@ -848,18 +1093,18 @@ function filmCard(film, idx = 0) {
       <div class="card-title">${esc(film.title)}</div>
       <div class="card-meta">
         <span class="card-year">${film.year||''}</span>
-        ${primaryGenre ? `<span class="card-genre-tag">${esc(primaryGenre)}</span>` : ''}
+        ${primaryGenre?`<span class="card-genre-tag">${esc(primaryGenre)}</span>`:''}
       </div>
     </div>
   </div>`;
 }
 
 function trackAndGo(id) {
-  let history = JSON.parse(localStorage.getItem('mvx_history')||'[]');
-  history = [id, ...history.filter(i => i !== id)].slice(0, 30);
-  localStorage.setItem('mvx_history', JSON.stringify(history));
-  const film = allFilms.find(f => f.id === id);
-  window.location.href = film && film.slug ? `/film/${film.slug}` : `watch.html?id=${id}`;
+  let hist = JSON.parse(localStorage.getItem('mvx_history')||'[]');
+  hist = [id, ...hist.filter(i=>i!==id)].slice(0,30);
+  localStorage.setItem('mvx_history', JSON.stringify(hist));
+  // Find from current DOM grid data not possible server-side, so just navigate
+  window.location.href = `watch.html?id=${id}`;
 }
 
 // ── GENRE ─────────────────────────────────────────────────────
@@ -883,7 +1128,6 @@ function setGenreDrop(pill, genre, icon, label) {
   else { badge.classList.remove('show'); }
   currentGenre = genre;
   closeGenreDropdown();
-  updateURL();
   filterFilms();
 }
 function clearGenreFilter() {
@@ -900,144 +1144,32 @@ function setGenre(_, genre) {
   }
 }
 
-// ── MAIN FILTER ───────────────────────────────────────────────
-function filterFilms() {
-  const q       = document.getElementById('searchInput').value.toLowerCase().trim();
-  const country = document.getElementById('countryFilter').value;
-  const year    = document.getElementById('yearFilter').value;
-  const lang    = document.getElementById('langFilter').value.toLowerCase();
-  const sort    = document.getElementById('sortFilter').value;
-  const minRating = parseFloat(document.getElementById('ratingFilter').value) || 0;
-
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  let pool = isWatchlistMode
-    ? allFilms.filter(f => getWatchlist().includes(f.id))
-    : isFeaturedMode
-    ? allFilms.filter(f => f.featured === true)
-    : isNewThisWeek
-    ? allFilms.filter(f => f.created_at && f.created_at >= sevenDaysAgo)
-    : allFilms;
-
-  filteredFilms = pool.filter(f => {
-    if (f.status && f.status !== 'active') return false;
-    const genres = (f.genre||'').split(',').map(g=>g.trim());
-    const matchGenre   = currentGenre === 'all' || genres.includes(currentGenre);
-    const matchQ       = !q || f.title.toLowerCase().includes(q) || (f.description||'').toLowerCase().includes(q) || (f.director||'').toLowerCase().includes(q) || (f.actors||'').toLowerCase().includes(q);
-    const matchCountry = !country || (f.country||'').split(',').map(c=>c.trim()).includes(country);
-    const matchYear    = !year ? true : year === 'older' ? (f.year && f.year < 2018) : String(f.year) === year;
-    const matchLang    = !lang || (f.language||'').toLowerCase() === lang;
-    const matchRating  = !minRating || (f.imdb_rating && f.imdb_rating >= minRating);
-    return matchGenre && matchQ && matchCountry && matchYear && matchLang && matchRating;
-  });
-
-  filteredFilms.sort((a, b) => {
-    switch(sort) {
-      case 'newest':    return (b.created_at||'') > (a.created_at||'') ? -1 : 1;
-      case 'oldest':    return (a.created_at||'') > (b.created_at||'') ? 1 : -1;
-      case 'az':        return (a.title||'').localeCompare(b.title||'');
-      case 'za':        return (b.title||'').localeCompare(a.title||'');
-      case 'imdb':      return (b.imdb_rating||0) - (a.imdb_rating||0);
-      case 'views':     return (b.views||0) - (a.views||0);
-      case 'year_asc':  { const yd = (a.year||0) - (b.year||0); return yd !== 0 ? yd : ((b.created_at||'') > (a.created_at||'') ? -1 : 1); }
-      default:          { const yd = (b.year||0) - (a.year||0); return yd !== 0 ? yd : ((b.created_at||'') > (a.created_at||'') ? -1 : 1); }
-    }
-  });
-
-  visibleCount = getBatchSize();
-  renderGrid();
-  renderActiveFilters(q, country, year, lang, minRating);
-}
-
-function renderGrid() {
-  // Full re-render (called on filter/sort change) — resets scroll to top
-  const total = filteredFilms.length;
-  const grid  = document.getElementById('filmGrid');
-
-  if (!total) {
-    grid.innerHTML = `
-      <div class="empty-state">
-        <div class="icon">🎬</div>
-        <h3>${isWatchlistMode ? 'Your watchlist is empty' : 'No films found'}</h3>
-        <p>${isWatchlistMode ? 'Browse films and tap the bookmark icon to save them.' : 'Try adjusting your search or filters'}</p>
-        ${!isWatchlistMode ? '<button onclick="clearAllFilters()">Clear Filters</button>' : ''}
-      </div>`;
-    document.getElementById('loadMoreWrap').style.display = 'none';
-    return;
-  }
-
-  const batch = filteredFilms.slice(0, visibleCount);
-  grid.innerHTML = batch.map((f, i) => filmCard(f, i)).join('');
-  renderLoadMore(total);
-}
-
-
-function renderLoadMore(total) {
-  const wrap = document.getElementById('loadMoreWrap');
-  if (visibleCount >= total) {
-    wrap.style.display = 'none';
-  } else {
-    wrap.style.display = 'flex';
-    document.getElementById('lmCount').textContent = Math.min(getBatchSize(), total - visibleCount) + ' more';
-  }
-}
-
-function loadMore() {
-  // Append-only: inject only new cards, never touch existing DOM
-  const total    = filteredFilms.length;
-  const prevCount = visibleCount;
-  visibleCount   += getBatchSize();
-  const newCards  = filteredFilms.slice(prevCount, visibleCount);
-  if (!newCards.length) return;
-
-  const grid = document.getElementById('filmGrid');
-  const frag = document.createDocumentFragment();
-  newCards.forEach((f, i) => {
-    const div = document.createElement('div');
-    div.innerHTML = filmCard(f, prevCount + i);
-    frag.appendChild(div.firstElementChild);
-  });
-  grid.appendChild(frag);
-  renderLoadMore(total);
-}
-
-
-function renderActiveFilters(q, country, year, lang, minRating) {
-  const chips = [];
-  if (currentGenre !== 'all') chips.push({ label: `Genre: ${currentGenre}`, action: "setGenreClear()" });
-  if (isNewThisWeek) chips.push({ label: 'New this week', action: "toggleNewThisWeek()" });
-  if (q)         chips.push({ label: `"${q}"`,           action: "clearSearch()" });
-  if (country)   chips.push({ label: country,            action: "clearCountry()" });
-  if (year)      chips.push({ label: year === 'older' ? 'Before 2018' : year, action: "clearYear()" });
-  if (lang)      chips.push({ label: lang,               action: "clearLang()" });
-  if (minRating) chips.push({ label: `${minRating}+ ★`,  action: "clearRating()" });
-  document.getElementById('activeFilters').innerHTML = chips.map(c =>
-    `<button class="filter-chip" onclick="${c.action}">${esc(c.label)} <span class="x">×</span></button>`
-  ).join('');
-}
-
+// ── CLEAR HELPERS ─────────────────────────────────────────────
 function clearAllFilters() {
-  document.getElementById('searchInput').value = '';
+  document.getElementById('searchInput').value  = '';
   document.getElementById('countryFilter').value = '';
-  document.getElementById('yearFilter').value = '';
-  document.getElementById('langFilter').value = '';
-  document.getElementById('sortFilter').value = 'year_desc';
+  document.getElementById('yearFilter').value   = '';
+  document.getElementById('langFilter').value   = '';
+  document.getElementById('sortFilter').value   = 'year_desc';
   document.getElementById('ratingFilter').value = '0';
+  isNewThisWeek = false;
+  document.getElementById('newWeekChip').classList.remove('active');
   setGenreClear();
 }
-function setGenreClear()  { const btn = document.querySelector('[data-genre="all"]'); if(btn) setGenre(btn,'all'); }
-function clearSearch()    { document.getElementById('searchInput').value=''; filterFilms(); }
-function clearCountry()   { document.getElementById('countryFilter').value=''; filterFilms(); }
-function clearYear()      { document.getElementById('yearFilter').value=''; filterFilms(); }
-function clearLang()      { document.getElementById('langFilter').value=''; filterFilms(); }
-function clearRating()    { document.getElementById('ratingFilter').value='0'; filterFilms(); }
+function setGenreClear() { const b = document.querySelector('[data-genre="all"]'); if(b) setGenre(b,'all'); }
+function clearSearch()   { document.getElementById('searchInput').value='';   filterFilms(); }
+function clearCountry()  { document.getElementById('countryFilter').value=''; filterFilms(); }
+function clearYear()     { document.getElementById('yearFilter').value='';    filterFilms(); }
+function clearLang()     { document.getElementById('langFilter').value='';    filterFilms(); }
+function clearRating()   { document.getElementById('ratingFilter').value='0'; filterFilms(); }
 
 // ── URL SYNC ─────────────────────────────────────────────────
 function updateURL() {
   const params = new URLSearchParams(location.search);
-  if (currentGenre !== 'all') params.set('genre', currentGenre);
-  else params.delete('genre');
+  if (currentGenre !== 'all') params.set('genre', currentGenre); else params.delete('genre');
   const q = document.getElementById('searchInput').value.trim();
   if (q) params.set('q', q); else params.delete('q');
+  if (currentPage > 1) params.set('page', currentPage); else params.delete('page');
   history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
 }
 
@@ -1072,6 +1204,7 @@ function readURL() {
     document.getElementById('searchInput').value = params.get('q');
     document.getElementById('navSearchInput').value = params.get('q');
   }
+  if (params.get('page')) currentPage = parseInt(params.get('page'),10) || 1;
   if (params.get('sort') === 'latest') document.getElementById('sortFilter').value = 'year_desc';
   if (params.get('featured') === 'true') isFeaturedMode = true;
 }
@@ -1079,12 +1212,12 @@ function readURL() {
 function applyNavSearch() {
   const q = document.getElementById('navSearchInput').value.trim();
   document.getElementById('searchInput').value = q;
-  filterFilms(); updateURL();
+  filterFilms();
 }
 function applyMobileSearch() {
   const q = document.getElementById('mobileSearchInput').value.trim();
   document.getElementById('searchInput').value = q;
-  filterFilms(); updateURL();
+  filterFilms();
   toggleMenu();
 }
 function toggleMenu() {
@@ -1106,35 +1239,17 @@ document.addEventListener('click', e => {
   }
 });
 
-// Load More — static button, event delegation, works on all mobile browsers
-document.getElementById('loadMoreBtn').addEventListener('click', function() {
-  loadMore();
-});
-
-
-// Re-render on resize so PAGE_SIZE stays in sync with column count
 let _resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(_resizeTimer);
-  _resizeTimer = setTimeout(() => {
-    if (filteredFilms.length) { visibleCount = getBatchSize(); renderGrid(); }
-  }, 200);
+  _resizeTimer = setTimeout(() => { fetchPage(currentPage); }, 300);
 });
+
+// ── INIT ──────────────────────────────────────────────────────
 async function init() {
   readURL();
-  const skeletonHTML = Array(18).fill(0).map(() => `<div class="skeleton"></div>`).join('');
-  document.getElementById('filmGrid').innerHTML = skeletonHTML;
-
-  try {
-    const fields = 'id,title,year,genre,thumbnail_url,imdb_rating,badge,views,country,duration_secs,language,featured,created_at,status';
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/films?select=${fields}&order=created_at.desc`, {
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-    });
-    allFilms = res.ok ? await res.json() : DEMO;
-    if (!allFilms.length) allFilms = DEMO;
-  } catch { allFilms = DEMO; }
-
-  filterFilms();
+  showSkeleton();
+  await fetchPage(currentPage);
 }
 
 init();
