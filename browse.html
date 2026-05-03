@@ -391,6 +391,19 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
   border-radius: 3px; padding: 1px 5px; font-size: 9px;
   color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.07em;
 }
+.card-actors {
+  display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;
+}
+.card-actor-tag {
+  font-size: 9px; color: var(--text-muted); cursor: pointer;
+  padding: 1px 5px; border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.03);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 90px; transition: color 0.12s, border-color 0.12s;
+  font-family: 'DM Sans', sans-serif;
+}
+.card-actor-tag:hover { color: var(--accent); border-color: rgba(232,71,63,0.3); }
 
 /* ── EMPTY + SKELETON ── */
 .empty-state { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--text-muted); }
@@ -433,12 +446,7 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
   min-width: 32px; height: 38px; color: var(--text-muted);
   font-family: 'Space Mono', monospace; font-size: 12px; user-select: none;
 }
-.pg-info {
-  width: 100%; text-align: center;
-  font-family: 'Space Mono', monospace; font-size: 9px;
-  color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase;
-  margin-top: 4px;
-}
+
 
 /* ── FOOTER ── */
 footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
@@ -477,7 +485,6 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
   .genre-dropdown-btn { font-size: 12px; padding: 7px 11px; }
   .new-week-chip { display: none; }
   .filter-country { display: none; }
-  .actor-search-box { display: none; }
 }
 </style>
 </head>
@@ -620,17 +627,13 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
       </div>
     </div>
 
-    <!-- Search -->
+    <!-- Search (also searches actors/directors via or= filter) -->
     <div class="search-box">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input type="text" id="searchInput" placeholder="Search titles, directors..." oninput="onSearchInput()" autocomplete="off" spellcheck="false">
+      <input type="text" id="searchInput" placeholder="Search titles, actors, directors..." oninput="onSearchInput()" autocomplete="off" spellcheck="false">
     </div>
-
-    <!-- Actor search -->
-    <div class="search-box actor-search-box">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
-      <input type="text" id="actorInput" placeholder="Search by actor..." oninput="onActorInput()" autocomplete="off" spellcheck="false">
-    </div>
+    <!-- Hidden actor filter — set programmatically when clicking actor tags on cards -->
+    <input type="hidden" id="actorInput" value="">
 
     <!-- Year -->
     <select class="filter-select" id="yearFilter" onchange="filterFilms()">
@@ -772,19 +775,19 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
 // ── CONFIG ────────────────────────────────────────────────────
 const SUPABASE_URL = localStorage.getItem('cv_url') || 'https://kncqgatjjcezlnwwikqm.supabase.co';
 const SUPABASE_KEY = localStorage.getItem('cv_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuY3FnYXRqamNlemxud3dpa3FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjUxMzMsImV4cCI6MjA5MDY0MTEzM30.irNGQnC6SlSq2ozVHToq1TnBAs_fKdukJMPmaMB1wyc';
-const FIELDS = 'id,title,year,genre,thumbnail_url,imdb_rating,badge,views,country,language,featured,created_at,status,slug';
+const FIELDS = 'id,title,year,genre,thumbnail_url,imdb_rating,badge,views,country,language,created_at,actors,slug';
 const PLACEHOLDERS = ['placeholder-1','placeholder-2','placeholder-3','placeholder-4'];
 
 // ── DEMO DATA (fallback when Supabase unavailable) ────────────
 const DEMO = [
-  { id:'demo1', title:'The Open Road',   year:2023, genre:'drama',       language:'English', country:'United States', featured:true,  status:'active', thumbnail_url:'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=400&q=80', views:142, imdb_rating:7.2 },
-  { id:'demo2', title:'City Lights',     year:2022, genre:'romance',     language:'English', country:'United Kingdom',featured:true,  status:'active', thumbnail_url:'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=400&q=80', views:98,  imdb_rating:6.8 },
-  { id:'demo3', title:'Deep Waters',     year:2023, genre:'thriller',    language:'English', country:'United States', featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1518929458119-e5bf444c30f4?w=400&q=80', views:210, imdb_rating:7.8 },
-  { id:'demo4', title:'Into The Wild',   year:2021, genre:'documentary', language:'English', country:'Canada',        featured:true,  status:'active', thumbnail_url:'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400&q=80', views:54,  imdb_rating:8.1 },
-  { id:'demo5', title:'Neon Nights',     year:2022, genre:'action',      language:'English', country:'United States', featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1524712245354-2c4e5e7121c0?w=400&q=80', views:305, badge:'Hot', imdb_rating:6.5 },
-  { id:'demo6', title:'The Last Summit', year:2023, genre:'action',      language:'English', country:'New Zealand',   featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400&q=80', views:77,  badge:'New', imdb_rating:7.0 },
-  { id:'demo7', title:'Laughter Club',   year:2022, genre:'comedy',      language:'English', country:'Australia',     featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=400&q=80', views:188 },
-  { id:'demo8', title:'Midnight Fear',   year:2023, genre:'horror',      language:'English', country:'United States', featured:false, status:'active', thumbnail_url:'https://images.unsplash.com/photo-1509248961158-e54f6934749c?w=400&q=80', views:421, badge:'Classic', imdb_rating:7.4 },
+  { id:'demo1', title:'The Open Road',   year:2023, genre:'drama',       language:'English', country:'United States', thumbnail_url:'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=400&q=80', views:142, imdb_rating:7.2 },
+  { id:'demo2', title:'City Lights',     year:2022, genre:'romance',     language:'English', country:'United Kingdom',thumbnail_url:'https://images.unsplash.com/photo-1440404653325-ab127d49abc1?w=400&q=80', views:98,  imdb_rating:6.8 },
+  { id:'demo3', title:'Deep Waters',     year:2023, genre:'thriller',    language:'English', country:'United States', thumbnail_url:'https://images.unsplash.com/photo-1518929458119-e5bf444c30f4?w=400&q=80', views:210, imdb_rating:7.8 },
+  { id:'demo4', title:'Into The Wild',   year:2021, genre:'documentary', language:'English', country:'Canada',        thumbnail_url:'https://images.unsplash.com/photo-1448375240586-882707db888b?w=400&q=80', views:54,  imdb_rating:8.1 },
+  { id:'demo5', title:'Neon Nights',     year:2022, genre:'action',      language:'English', country:'United States', thumbnail_url:'https://images.unsplash.com/photo-1524712245354-2c4e5e7121c0?w=400&q=80', views:305, badge:'Hot', imdb_rating:6.5 },
+  { id:'demo6', title:'The Last Summit', year:2023, genre:'action',      language:'English', country:'New Zealand',   thumbnail_url:'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=400&q=80', views:77,  badge:'New', imdb_rating:7.0 },
+  { id:'demo7', title:'Laughter Club',   year:2022, genre:'comedy',      language:'English', country:'Australia',     thumbnail_url:'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=400&q=80', views:188 },
+  { id:'demo8', title:'Midnight Fear',   year:2023, genre:'horror',      language:'English', country:'United States', thumbnail_url:'https://images.unsplash.com/photo-1509248961158-e54f6934749c?w=400&q=80', views:421, badge:'Classic', imdb_rating:7.4 },
 ];
 
 // ── UTILS ─────────────────────────────────────────────────────
@@ -830,7 +833,6 @@ let isFeaturedMode  = false;
 let isNewThisWeek   = false;
 let isLoading       = false;
 let _searchTimer    = null;   // debounce handle
-let _actorTimer     = null;   // actor debounce handle
 
 function getPageSize() { return window.innerWidth >= 768 ? 56 : 42; }
 function totalPages()  { return Math.max(1, Math.ceil(totalCount / getPageSize())); }
@@ -994,15 +996,24 @@ function goToPage(p) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// ── ACTOR TAG CLICK — set actor filter and fetch ─────────────
+function filterByActor(name) {
+  document.getElementById('actorInput').value = name;
+  // Also clear main search so they don't conflict
+  document.getElementById('searchInput').value = '';
+  document.getElementById('navSearchInput').value = '';
+  filterFilms();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 // ── DEBOUNCED SEARCH (so we don't fire on every keystroke) ─────
 function onSearchInput() {
+  // clear actor filter when user types in main search
+  document.getElementById('actorInput').value = '';
   clearTimeout(_searchTimer);
   _searchTimer = setTimeout(() => { filterFilms(); }, 350);
 }
-function onActorInput() {
-  clearTimeout(_actorTimer);
-  _actorTimer = setTimeout(() => { filterFilms(); }, 350);
-}
+
 
 // ── RENDER ────────────────────────────────────────────────────
 function showSkeleton() {
@@ -1037,13 +1048,9 @@ function renderPagination() {
   const wrap = document.getElementById('paginationWrap');
   const tp   = totalPages();
   const cp   = currentPage;
-  const ps   = getPageSize();
 
   if (tp <= 1) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'flex';
-
-  const from = (cp - 1) * ps + 1;
-  const to   = Math.min(cp * ps, totalCount);
 
   function pageNums(cur, last) {
     const range = [];
@@ -1067,7 +1074,6 @@ function renderPagination() {
   html += `<button class="pg-btn pg-next${cp===tp?' disabled':''}" ${cp===tp?'disabled':''} onclick="goToPage(${cp+1})">
     Next<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg></button>`;
 
-  html += `<div class="pg-info">${from}–${to} of ${totalCount} films · page ${cp} of ${tp}</div>`;
   wrap.innerHTML = html;
 }
 
@@ -1106,7 +1112,7 @@ function filmCard(film, idx) {
   const cType = contentType(film);
   const typeClass = cType==='TV'?'tv':'movie';
   return `
-  <div class="film-card" onclick="trackAndGo('${esc(film.id)}')">
+  <div class="film-card" onclick="trackAndGo('${esc(film.id)}','${esc(film.slug||'')}')">
     <div class="card-thumb">
       ${thumb}
       ${film.imdb_rating?`<div class="card-rating"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>${film.imdb_rating}</div>`:''}
@@ -1123,16 +1129,20 @@ function filmCard(film, idx) {
         <span class="card-year">${film.year||''}</span>
         ${primaryGenre?`<span class="card-genre-tag">${esc(primaryGenre)}</span>`:''}
       </div>
+      ${film.actors ? `<div class="card-actors">${
+        film.actors.split(',').slice(0,2).map(a=>a.trim()).filter(Boolean).map(a=>
+          `<span class="card-actor-tag" onclick="event.stopPropagation();filterByActor('${esc(a)}')" title="Filter by ${esc(a)}">${esc(a)}</span>`
+        ).join('')
+      }</div>` : ''}
     </div>
   </div>`;
 }
 
-function trackAndGo(id) {
+function trackAndGo(id, slug) {
   let hist = JSON.parse(localStorage.getItem('mvx_history')||'[]');
   hist = [id, ...hist.filter(i=>i!==id)].slice(0,30);
   localStorage.setItem('mvx_history', JSON.stringify(hist));
-  // Find from current DOM grid data not possible server-side, so just navigate
-  window.location.href = `watch.html?id=${id}`;
+  window.location.href = slug ? `watch.html?slug=${slug}` : `watch.html?id=${id}`;
 }
 
 // ── GENRE ─────────────────────────────────────────────────────
@@ -1158,11 +1168,6 @@ function setGenreDrop(pill, genre, icon, label) {
   closeGenreDropdown();
   filterFilms();
 }
-function clearGenreFilter() {
-  const allPill = document.querySelector('.gdp-pill[data-genre="all"]');
-  if (allPill) setGenreDrop(allPill, 'all', '🎬', 'All Genres');
-  else closeGenreDropdown();
-}
 function setGenre(_, genre) {
   const pill = document.querySelector(`.gdp-pill[data-genre="${genre}"]`);
   if (pill) {
@@ -1185,6 +1190,11 @@ function clearAllFilters() {
   document.getElementById('newWeekChip').classList.remove('active');
   setGenreClear();
 }
+function clearGenreFilter() {
+  const allPill = document.querySelector('.gdp-pill[data-genre="all"]');
+  if (allPill) setGenreDrop(allPill, 'all', '🎬', 'All Genres');
+  else closeGenreDropdown();
+}
 function setGenreClear() { const b = document.querySelector('[data-genre="all"]'); if(b) setGenre(b,'all'); }
 function clearSearch()   { document.getElementById('searchInput').value='';   filterFilms(); }
 function clearActor()    { document.getElementById('actorInput').value='';    filterFilms(); }
@@ -1199,6 +1209,8 @@ function updateURL() {
   if (currentGenre !== 'all') params.set('genre', currentGenre); else params.delete('genre');
   const q = document.getElementById('searchInput').value.trim();
   if (q) params.set('q', q); else params.delete('q');
+  const actor = document.getElementById('actorInput').value.trim();
+  if (actor) params.set('actor', actor); else params.delete('actor');
   if (currentPage > 1) params.set('page', currentPage); else params.delete('page');
   history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
 }
@@ -1234,6 +1246,9 @@ function readURL() {
     document.getElementById('searchInput').value = params.get('q');
     document.getElementById('navSearchInput').value = params.get('q');
   }
+  if (params.get('actor')) {
+    document.getElementById('actorInput').value = params.get('actor');
+  }
   if (params.get('page')) currentPage = parseInt(params.get('page'),10) || 1;
   if (params.get('sort') === 'latest') document.getElementById('sortFilter').value = 'year_desc';
   if (params.get('featured') === 'true') isFeaturedMode = true;
@@ -1242,11 +1257,13 @@ function readURL() {
 function applyNavSearch() {
   const q = document.getElementById('navSearchInput').value.trim();
   document.getElementById('searchInput').value = q;
+  document.getElementById('actorInput').value = '';
   filterFilms();
 }
 function applyMobileSearch() {
   const q = document.getElementById('mobileSearchInput').value.trim();
   document.getElementById('searchInput').value = q;
+  document.getElementById('actorInput').value = '';
   filterFilms();
   toggleMenu();
 }
