@@ -26,8 +26,8 @@
   --bg: #0a0a0f; --surface: #111118; --surface2: #16161f;
   --border: rgba(255,255,255,0.07); --text: #f0eee8;
   --text-muted: #55536a; --text-dim: #8886a0;
-  --accent: #e8473f; --accent2: #ff6b35; --gold: #f5c518; --blue: #3d7fff;
-  --green: #2dd4a0; --radius: 6px;
+  --accent: #e8473f; --gold: #f5c518; --blue: #3d7fff;
+  --green: #2dd4a0;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
@@ -477,6 +477,7 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
   .genre-dropdown-btn { font-size: 12px; padding: 7px 11px; }
   .new-week-chip { display: none; }
   .filter-country { display: none; }
+  .actor-search-box { display: none; }
 }
 </style>
 </head>
@@ -622,7 +623,13 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
     <!-- Search -->
     <div class="search-box">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input type="text" id="searchInput" placeholder="Search titles, directors, actors..." oninput="onSearchInput()" autocomplete="off" spellcheck="false">
+      <input type="text" id="searchInput" placeholder="Search titles, directors..." oninput="onSearchInput()" autocomplete="off" spellcheck="false">
+    </div>
+
+    <!-- Actor search -->
+    <div class="search-box actor-search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+      <input type="text" id="actorInput" placeholder="Search by actor..." oninput="onActorInput()" autocomplete="off" spellcheck="false">
     </div>
 
     <!-- Year -->
@@ -765,7 +772,7 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
 // ── CONFIG ────────────────────────────────────────────────────
 const SUPABASE_URL = localStorage.getItem('cv_url') || 'https://kncqgatjjcezlnwwikqm.supabase.co';
 const SUPABASE_KEY = localStorage.getItem('cv_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuY3FnYXRqamNlemxud3dpa3FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjUxMzMsImV4cCI6MjA5MDY0MTEzM30.irNGQnC6SlSq2ozVHToq1TnBAs_fKdukJMPmaMB1wyc';
-const FIELDS = 'id,title,year,genre,thumbnail_url,imdb_rating,badge,views,country,duration_secs,language,featured,created_at,status,slug';
+const FIELDS = 'id,title,year,genre,thumbnail_url,imdb_rating,badge,views,country,language,featured,created_at,status,slug';
 const PLACEHOLDERS = ['placeholder-1','placeholder-2','placeholder-3','placeholder-4'];
 
 // ── DEMO DATA (fallback when Supabase unavailable) ────────────
@@ -782,7 +789,6 @@ const DEMO = [
 
 // ── UTILS ─────────────────────────────────────────────────────
 function esc(s) { if(!s)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function formatDur(s) { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${m}m`:`${m}m`; }
 
 function contentType(film) {
   const g = (film.genre||'').toLowerCase();
@@ -806,13 +812,13 @@ function toggleWatchlistItem(id) {
 function clearWatchlist() {
   if (!confirm('Clear your entire watchlist?')) return;
   setWatchlist([]);
-  fetchAndRender();
+  fetchPage(currentPage);
 }
 function cardToggleWl(btn, id) {
   const saved = toggleWatchlistItem(id);
   btn.classList.toggle('saved', saved);
   btn.title = saved ? 'Remove from watchlist' : 'Add to watchlist';
-  if (isWatchlistMode) fetchAndRender();
+  if (isWatchlistMode) fetchPage(currentPage);
 }
 
 // ── STATE ─────────────────────────────────────────────────────
@@ -824,6 +830,7 @@ let isFeaturedMode  = false;
 let isNewThisWeek   = false;
 let isLoading       = false;
 let _searchTimer    = null;   // debounce handle
+let _actorTimer     = null;   // actor debounce handle
 
 function getPageSize() { return window.innerWidth >= 768 ? 56 : 42; }
 function totalPages()  { return Math.max(1, Math.ceil(totalCount / getPageSize())); }
@@ -836,6 +843,7 @@ function buildQuery(page) {
   const lang      = document.getElementById('langFilter').value;
   const sort      = document.getElementById('sortFilter').value;
   const minRating = parseFloat(document.getElementById('ratingFilter').value) || 0;
+  const actor     = document.getElementById('actorInput').value.trim();
   const ps        = getPageSize();
   const offset    = (page - 1) * ps;
 
@@ -861,10 +869,22 @@ function buildQuery(page) {
     params.set('genre', `ilike.*${currentGenre}*`);
   }
 
-  if (q) {
-    // full-text style: search title OR description OR director OR actors
-    // Supabase OR filter syntax
-    params.set('or', `title.ilike.*${encodeURIComponent(q)}*,description.ilike.*${encodeURIComponent(q)}*,director.ilike.*${encodeURIComponent(q)}*,actors.ilike.*${encodeURIComponent(q)}*`);
+  // Escape special chars that break Supabase ilike filters
+  function sbEsc(v) { return v.replace(/\\/g,'\\\\').replace(/%/g,'\\%').replace(/\*/g,'\\*').replace(/\(/g,'\\(').replace(/\)/g,'\\)'); }
+
+  if (q && !actor) {
+    // full-text across multiple columns — only when actor box is empty to avoid conflict
+    const qe = sbEsc(q);
+    params.set('or', `title.ilike.*${qe}*,description.ilike.*${qe}*,director.ilike.*${qe}*,actors.ilike.*${qe}*`);
+  } else if (q && actor) {
+    // both set: search title/description/director only (actor filter handles actors)
+    const qe = sbEsc(q);
+    params.set('or', `title.ilike.*${qe}*,description.ilike.*${qe}*,director.ilike.*${qe}*`);
+  }
+
+  if (actor) {
+    // dedicated actors-only filter — no conflict with or= block
+    params.set('actors', `ilike.*${sbEsc(actor)}*`);
   }
 
   if (country) params.set('country', `ilike.*${country}*`);
@@ -955,7 +975,8 @@ function hasActiveFilters() {
   const year    = document.getElementById('yearFilter').value;
   const lang    = document.getElementById('langFilter').value;
   const minRating = parseFloat(document.getElementById('ratingFilter').value) || 0;
-  return !!(q || country || year || lang || minRating || currentGenre !== 'all' || isNewThisWeek || isWatchlistMode || isFeaturedMode);
+  const actor = document.getElementById('actorInput').value.trim();
+  return !!(q || actor || country || year || lang || minRating || currentGenre !== 'all' || isNewThisWeek || isWatchlistMode || isFeaturedMode);
 }
 
 // ── TRIGGER FETCH (called by all filter/sort/page changes) ─────
@@ -969,6 +990,7 @@ function goToPage(p) {
   if (isLoading) return;
   currentPage = Math.max(1, Math.min(p, totalPages()));
   fetchPage(currentPage);
+  updateURL();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -976,6 +998,10 @@ function goToPage(p) {
 function onSearchInput() {
   clearTimeout(_searchTimer);
   _searchTimer = setTimeout(() => { filterFilms(); }, 350);
+}
+function onActorInput() {
+  clearTimeout(_actorTimer);
+  _actorTimer = setTimeout(() => { filterFilms(); }, 350);
 }
 
 // ── RENDER ────────────────────────────────────────────────────
@@ -1002,7 +1028,7 @@ function renderGrid(films) {
     return;
   }
 
-  const offset = (currentPage - 1) * getPageSize();
+  const offset = 10000 + (currentPage - 1) * getPageSize();
   grid.innerHTML = films.map((f, i) => filmCard(f, offset + i)).join('');
   renderPagination();
 }
@@ -1047,6 +1073,7 @@ function renderPagination() {
 
 function renderActiveFilters() {
   const q         = document.getElementById('searchInput').value.trim();
+  const actor     = document.getElementById('actorInput').value.trim();
   const country   = document.getElementById('countryFilter').value;
   const year      = document.getElementById('yearFilter').value;
   const lang      = document.getElementById('langFilter').value;
@@ -1055,6 +1082,7 @@ function renderActiveFilters() {
   if (currentGenre !== 'all') chips.push({ label: `Genre: ${currentGenre}`, action: "setGenreClear()" });
   if (isNewThisWeek)  chips.push({ label: 'New this week',          action: "toggleNewThisWeek()" });
   if (q)              chips.push({ label: `"${q}"`,                 action: "clearSearch()" });
+  if (actor)          chips.push({ label: `Actor: ${actor}`,        action: "clearActor()" });
   if (country)        chips.push({ label: country,                  action: "clearCountry()" });
   if (year)           chips.push({ label: year==='older'?'Before 2018':year, action: "clearYear()" });
   if (lang)           chips.push({ label: lang,                     action: "clearLang()" });
@@ -1147,6 +1175,7 @@ function setGenre(_, genre) {
 // ── CLEAR HELPERS ─────────────────────────────────────────────
 function clearAllFilters() {
   document.getElementById('searchInput').value  = '';
+  document.getElementById('actorInput').value    = '';
   document.getElementById('countryFilter').value = '';
   document.getElementById('yearFilter').value   = '';
   document.getElementById('langFilter').value   = '';
@@ -1158,6 +1187,7 @@ function clearAllFilters() {
 }
 function setGenreClear() { const b = document.querySelector('[data-genre="all"]'); if(b) setGenre(b,'all'); }
 function clearSearch()   { document.getElementById('searchInput').value='';   filterFilms(); }
+function clearActor()    { document.getElementById('actorInput').value='';    filterFilms(); }
 function clearCountry()  { document.getElementById('countryFilter').value=''; filterFilms(); }
 function clearYear()     { document.getElementById('yearFilter').value='';    filterFilms(); }
 function clearLang()     { document.getElementById('langFilter').value='';    filterFilms(); }
@@ -1240,9 +1270,17 @@ document.addEventListener('click', e => {
 });
 
 let _resizeTimer;
+let _lastPageSize = getPageSize();
 window.addEventListener('resize', () => {
   clearTimeout(_resizeTimer);
-  _resizeTimer = setTimeout(() => { fetchPage(currentPage); }, 300);
+  _resizeTimer = setTimeout(() => {
+    const newSize = getPageSize();
+    if (newSize !== _lastPageSize) {
+      _lastPageSize = newSize;
+      currentPage = 1;
+      fetchPage(1);
+    }
+  }, 300);
 });
 
 // ── INIT ──────────────────────────────────────────────────────
