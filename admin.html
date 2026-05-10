@@ -1344,7 +1344,7 @@ let SUPABASE_URL   = localStorage.getItem('cv_url')    || 'https://kncqgatjjcezl
 let SUPABASE_KEY   = localStorage.getItem('cv_key')    || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuY3FnYXRqamNlemxud3dpa3FtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNjUxMzMsImV4cCI6MjA5MDY0MTEzM30.irNGQnC6SlSq2ozVHToq1TnBAs_fKdukJMPmaMB1wyc';
 let WORKER_URL     = localStorage.getItem('cv_worker') || '';
 let R2_BASE        = localStorage.getItem('cv_r2')     || 'https://videos.movxio.com';
-let SESSION_TOKEN  = null;
+let SESSION_TOKEN  = sessionStorage.getItem('cv_session') || null; // fix #4 — restore on refresh
 let editingId      = null;
 let subtitleCount  = 0;
 let allFilmsCache  = [];
@@ -1369,6 +1369,7 @@ async function doLogin() {
     const data = await res.json();
     if (!res.ok || !data.access_token) throw new Error(data.error_description || 'Login failed');
     SESSION_TOKEN = data.access_token;
+    sessionStorage.setItem('cv_session', SESSION_TOKEN); // fix #4 — survive page refresh
     document.getElementById('login-screen').style.display = 'none';
     loadFilms();
     loadBanners();
@@ -1381,7 +1382,7 @@ async function doLogin() {
     btn.disabled = false;
   }
 }
-function logout() { SESSION_TOKEN = null; location.reload(); }
+function logout() { SESSION_TOKEN = null; sessionStorage.removeItem('cv_session'); location.reload(); }
 
 // ── PAGE NAVIGATION ───────────────────────────────────────────
 const ALL_PAGES = ['films','banners','ads','settings','sql','deploy','push'];
@@ -1424,6 +1425,12 @@ async function supaFetch(path, method = 'GET', body = null) {
   if (!res.ok) throw new Error(await res.text());
   const txt = await res.text();
   return txt ? JSON.parse(txt) : [];
+}
+
+// ── HTML ESCAPE HELPER (fix #6 — prevent XSS from DB data in innerHTML) ──────
+function escHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ── LOCAL FALLBACK ─────────────────────────────────────────────
@@ -1469,13 +1476,31 @@ async function loadFilms() {
   }
   allFilmsCache = films;
 
-  // Stats — use real DB total if available, else local count
+  // Stats — fetch accurate counts from DB (fix #5 & #8: correct even when >1000 films)
   const displayTotal = realTotal !== null ? realTotal : films.length;
-  const totalViews = films.reduce((a, f) => a + (f.views || 0), 0);
-  document.getElementById('stat-total').textContent    = displayTotal.toLocaleString();
-  document.getElementById('stat-featured').textContent = films.filter(f => f.featured).length;
-  document.getElementById('stat-video').textContent    = films.filter(f => f.hls_url).length;
-  document.getElementById('stat-views').textContent    = totalViews > 999 ? (totalViews/1000).toFixed(1)+'K' : totalViews;
+  document.getElementById('stat-total').textContent = displayTotal.toLocaleString();
+
+  // Accurate counts via separate count queries
+  try {
+    const [featRes, videoRes, viewsRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/films?select=id&featured=eq.true`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SESSION_TOKEN || SUPABASE_KEY}`, 'Prefer': 'count=exact', 'Range': '0-0' } }),
+      fetch(`${SUPABASE_URL}/rest/v1/films?select=id&hls_url=not.is.null`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SESSION_TOKEN || SUPABASE_KEY}`, 'Prefer': 'count=exact', 'Range': '0-0' } }),
+      fetch(`${SUPABASE_URL}/rest/v1/films?select=views`, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SESSION_TOKEN || SUPABASE_KEY}`, 'Cache-Control': 'no-cache' } }),
+    ]);
+    const featRange = featRes.headers.get('Content-Range');
+    const videoRange = videoRes.headers.get('Content-Range');
+    if (featRange)  document.getElementById('stat-featured').textContent = parseInt(featRange.match(/\/(\d+)$/)?.[1] || 0).toLocaleString();
+    if (videoRange) document.getElementById('stat-video').textContent    = parseInt(videoRange.match(/\/(\d+)$/)?.[1] || 0).toLocaleString();
+    const viewRows = viewsRes.ok ? await viewsRes.json() : [];
+    const totalViews = viewRows.reduce((a, r) => a + (r.views || 0), 0);
+    document.getElementById('stat-views').textContent = totalViews > 999999 ? (totalViews/1000000).toFixed(1)+'M' : totalViews > 999 ? (totalViews/1000).toFixed(1)+'K' : totalViews;
+  } catch {
+    // Fallback to local counts if the extra queries fail
+    const totalViews = films.reduce((a, f) => a + (f.views || 0), 0);
+    document.getElementById('stat-featured').textContent = films.filter(f => f.featured).length;
+    document.getElementById('stat-video').textContent    = films.filter(f => f.hls_url).length;
+    document.getElementById('stat-views').textContent    = totalViews > 999 ? (totalViews/1000).toFixed(1)+'K' : totalViews;
+  }
 
   renderFilmTable(films);
 
@@ -1511,8 +1536,8 @@ function renderFilmTable(films) {
     <div class="film-list-item">
       ${f.thumbnail_url ? `<img class="list-thumb" src="${f.thumbnail_url}" alt="">` : `<div class="list-thumb-ph">🎬</div>`}
       <div class="list-info">
-        <div class="list-title">${f.title}${f.featured ? ' <span class="badge-featured">★</span>' : ''}</div>
-        <div class="list-meta"><span class="badge-${f.type === 'series' ? 'series' : 'movie'}">${f.type === 'series' ? '📺 Series' : '🎬 Movie'}</span> · ${f.country || '—'} · ${f.year || '—'} · ${f.imdb_rating ? '⭐'+f.imdb_rating : ''}</div>
+        <div class="list-title">${escHtml(f.title)}${f.featured ? ' <span class="badge-featured">★</span>' : ''}</div>
+        <div class="list-meta"><span class="badge-${f.type === 'series' ? 'series' : 'movie'}">${f.type === 'series' ? '📺 Series' : '🎬 Movie'}</span> · ${escHtml(f.country) || '—'} · ${escHtml(f.year) || '—'} · ${f.imdb_rating ? '⭐'+f.imdb_rating : ''}</div>
       </div>
       <div class="list-actions">
         <button class="btn-edit" onclick="editFilmById('${f.id}')">Edit</button>
@@ -1528,11 +1553,11 @@ function renderFilmTable(films) {
         ${f.thumbnail_url ? `<img class="row-thumb" src="${f.thumbnail_url}" alt="">` : '<div style="width:36px;height:54px;border-radius:3px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:16px;opacity:0.4;">🎬</div>'}
       </td>
       <td>
-        <strong>${f.title}</strong>
+        <strong>${escHtml(f.title)}</strong>
         <span class="badge-${f.type === 'series' ? 'series' : 'movie'}" style="margin-left:6px;font-size:9px;">${f.type === 'series' ? '📺 Series' : '🎬'}</span>
-        ${f.director ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;">Dir: ${f.director}</div>` : ''}
+        ${f.director ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;">Dir: ${escHtml(f.director)}</div>` : ''}
         ${f.type === 'series' && f.total_seasons ? `<div style="font-size:11px;color:var(--blue);margin-top:2px;">${f.total_seasons} Season${f.total_seasons > 1 ? 's' : ''}</div>` : ''}
-        ${f.badge ? `<span style="font-size:9px;background:rgba(232,184,75,0.15);color:var(--gold);padding:1px 6px;border-radius:3px;font-weight:700;">${f.badge}</span>` : ''}
+        ${f.badge ? `<span style="font-size:9px;background:rgba(232,184,75,0.15);color:var(--gold);padding:1px 6px;border-radius:3px;font-weight:700;">${escHtml(f.badge)}</span>` : ''}
       </td>
       <td>${genreBadges(f.genre)}</td>
       <td style="font-size:12px;color:var(--muted);">${f.country || '—'}</td>
@@ -1781,6 +1806,7 @@ async function saveFilm() {
     chapters:      getChapters(),
     duration_secs: durMins ? durMins * 60 : null,
     total_seasons: currentType === 'series' ? (parseInt((document.getElementById('f-seasons')||{}).value)||1) : null,
+    series_status: currentType === 'series' ? (document.getElementById('f-series-status')?.value || null) : null, // fix #7
   };
 
   try {
@@ -2428,8 +2454,14 @@ async function loadPushStats() {
 function logPush(msg, ok) {
   var log = document.getElementById('pushLog');
   var now = new Date().toLocaleTimeString();
-  var line = now + '  ' + (ok ? '✓' : '✗') + '  ' + msg;
-  log.innerHTML = line + '<br>' + (log.innerHTML === 'No notifications sent yet this session.' ? '' : log.innerHTML);
+  // fix #3 — use DOM nodes instead of innerHTML to avoid XSS from server error text
+  var entry = document.createElement('div');
+  entry.textContent = now + '  ' + (ok ? '✓' : '✗') + '  ' + msg;
+  entry.style.cssText = 'color:' + (ok ? 'var(--green)' : 'var(--red)') + ';margin-bottom:2px;';
+  if (log.firstChild && log.firstChild.textContent === 'No notifications sent yet this session.') {
+    log.innerHTML = '';
+  }
+  log.insertBefore(entry, log.firstChild);
 }
 
 async function sendPushNotification() {
@@ -2451,24 +2483,21 @@ async function sendPushNotification() {
   if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
 
   try {
-    // Fetch all subscriptions from Supabase
-    var subs = await supaFetch('push_subscriptions?select=*&status=eq.active');
-    if (!subs || !subs.length) {
-      toast('No active subscribers yet');
-      logPush('No active subscribers found', false);
-      return;
-    }
-
+    // fix #2 — don't pull subscriber endpoint/auth data into browser.
+    // Send just the push payload to the worker; worker fetches subscriptions server-side.
     // POST to Cloudflare Worker push endpoint
     var res = await fetch(WORKER_URL + '/push', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Supabase-Url': SUPABASE_URL,
+        'X-Supabase-Key': SUPABASE_KEY,
+      },
       body: JSON.stringify({
         title,
         body,
         url:  url.startsWith('http') ? url : 'https://movxio.com/' + url.replace(/^\//, ''),
         icon,
-        subscriptions: subs,
       }),
     });
 
@@ -2505,7 +2534,18 @@ showPage = function(p) {
 
 </script>
 
-
+<script>
+// ── AUTO-RESTORE SESSION on load (fix #4) — runs after all functions defined ──
+document.addEventListener('DOMContentLoaded', function() {
+  if (SESSION_TOKEN) {
+    var loginEl = document.getElementById('login-screen');
+    if (loginEl) loginEl.style.display = 'none';
+    loadFilms();
+    loadBanners();
+    loadAdSettings();
+  }
+});
+</script>
 
 </body>
 </html>
