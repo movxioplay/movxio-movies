@@ -177,16 +177,25 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 /* ── Duplicate button ── */
 .btn-dupe { padding:5px 10px; border-radius:6px; font-size:11px; font-weight:600; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:var(--muted); cursor:pointer; transition:all 0.15s; font-family:'DM Sans',sans-serif; }
 .btn-dupe:hover { background:rgba(255,255,255,0.1); color:var(--text); }
-/* ── Analytics chart ── */
+/* ── Top Films Leaderboard ── */
 .analytics-section { margin-bottom:24px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px 24px; }
-.analytics-title { font-size:13px; font-weight:600; color:var(--text); margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.analytics-title { font-size:13px; font-weight:600; color:var(--text); margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 .analytics-title select { background:var(--bg); border:1px solid var(--border); color:var(--muted); padding:5px 10px; border-radius:6px; font-size:12px; font-family:'DM Sans',sans-serif; outline:none; }
-.chart-wrap { width:100%; overflow-x:auto; }
-.chart-bars { display:flex; align-items:flex-end; gap:6px; height:140px; padding-bottom:24px; position:relative; min-width:300px; }
-.chart-bar-col { display:flex; flex-direction:column; align-items:center; gap:4px; flex:1; min-width:28px; }
-.chart-bar { width:100%; border-radius:4px 4px 0 0; background:linear-gradient(to top, var(--accent), rgba(232,71,63,0.4)); transition:height 0.4s ease; cursor:default; position:relative; min-height:2px; }
-.chart-bar:hover::after { content:attr(data-val); position:absolute; top:-22px; left:50%; transform:translateX(-50%); background:rgba(8,8,16,0.9); color:#fff; font-size:10px; padding:2px 6px; border-radius:4px; white-space:nowrap; font-family:'Space Mono',monospace; }
-.chart-label { font-size:9px; color:var(--muted); text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; margin-top:-20px; }
+.top-films-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+@media(min-width:1024px){ .top-films-grid { grid-template-columns:repeat(10,1fr); } }
+@media(max-width:600px){ .top-films-grid { grid-template-columns:repeat(5,1fr); } }
+.top-film-card { position:relative; cursor:default; }
+.top-film-rank { position:absolute; top:5px; left:5px; z-index:2; width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; font-family:'Bebas Neue',sans-serif; letter-spacing:0; }
+.top-film-rank.rank-1 { background:#e8b84b; color:#000; width:22px; height:22px; font-size:11px; }
+.top-film-rank.rank-2 { background:#aaa; color:#000; }
+.top-film-rank.rank-3 { background:#c87941; color:#fff; }
+.top-film-rank.rank-other { background:rgba(0,0,0,0.65); color:rgba(255,255,255,0.7); }
+.top-film-poster { width:100%; aspect-ratio:2/3; object-fit:cover; border-radius:6px; display:block; background:var(--surface2); }
+.top-film-poster-ph { width:100%; aspect-ratio:2/3; border-radius:6px; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-size:24px; }
+.top-film-info { margin-top:6px; }
+.top-film-title { font-size:11px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.3; }
+.top-film-stat { font-size:10px; color:var(--gold); margin-top:2px; font-weight:600; }
+.top-film-card:hover .top-film-title { color:var(--gold); }
 
 .badge-hls { background: rgba(45,212,160,0.1); color: var(--green); border: 1px solid rgba(45,212,160,0.2); padding: 3px 9px; border-radius: 8px; font-size: 11px; }
 .badge-no-video { background: rgba(230,57,70,0.1); color: var(--red); border: 1px solid rgba(230,57,70,0.2); padding: 3px 9px; border-radius: 8px; font-size: 11px; }
@@ -668,18 +677,16 @@ tr:hover td { background: rgba(255,255,255,0.02); }
       </div>
 
       <!-- FILM TABLE -->
-      <!-- ── Views Analytics Chart ── -->
+      <!-- ── Top Films Leaderboard ── -->
       <div class="analytics-section" id="analyticsSection">
         <div class="analytics-title">
-          Top Films by Views
+          <span>Top Films</span>
           <select id="chartMetric" onchange="renderChart()">
-            <option value="views">Views</option>
-            <option value="imdb_rating">IMDb Rating</option>
+            <option value="views">By Views</option>
+            <option value="imdb_rating">By IMDb Rating</option>
           </select>
         </div>
-        <div class="chart-wrap">
-          <div class="chart-bars" id="chartBars"></div>
-        </div>
+        <div id="topFilmsGrid" class="top-films-grid"></div>
       </div>
 
       <!-- ── Bulk Action Bar ── -->
@@ -2260,44 +2267,50 @@ function toast(msg, err = false) {
 // PASS 5 FEATURES
 // ════════════════════════════════════════════════════════════
 
-// ── Views Analytics Chart ────────────────────────────────────
+// ── Top Films Leaderboard ────────────────────────────────────
 function renderChart() {
   const metricSel = document.getElementById('chartMetric');
   let metric = metricSel ? (metricSel.value || 'views') : 'views';
 
-  // Auto-switch to imdb_rating if no films have views yet
+  // Auto-switch to imdb_rating when no films have views yet
   const hasViews = allFilmsCache.some(f => (f.views || 0) > 0);
   if (metric === 'views' && !hasViews) {
     metric = 'imdb_rating';
     if (metricSel) metricSel.value = 'imdb_rating';
   }
 
+  const grid = document.getElementById('topFilmsGrid');
+  if (!grid) return;
+
   const films = [...allFilmsCache]
     .filter(f => (parseFloat(f[metric]) || 0) > 0)
     .sort((a, b) => (parseFloat(b[metric]) || 0) - (parseFloat(a[metric]) || 0))
     .slice(0, 10);
 
-  const bars = document.getElementById('chartBars');
-  if (!bars) return;
-
   if (!films.length) {
-    bars.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:116px;color:var(--muted);font-size:13px;">No data yet — add films to see the chart</div>';
+    grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0;grid-column:1/-1;">No data yet — films will appear here once added.</div>';
     return;
   }
 
-  const CHART_H = 116; // px
-  const max = Math.max(...films.map(f => parseFloat(f[metric]) || 0)) || 1;
+  const rankClass = i => i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'rank-other';
 
-  bars.innerHTML = films.map(f => {
+  grid.innerHTML = films.map((f, i) => {
     const val  = parseFloat(f[metric]) || 0;
-    const px   = Math.max(Math.round((val / max) * CHART_H), 3);
-    const disp = metric === 'views' ? (val > 999 ? (val/1000).toFixed(1)+'K' : val) : val.toFixed(1);
-    const name = f.title.length > 12 ? f.title.slice(0, 11) + '…' : f.title;
-    return `
-      <div class="chart-bar-col">
-        <div class="chart-bar" style="height:${px}px" data-val="${disp}"></div>
-        <div class="chart-label" title="${f.title}">${name}</div>
-      </div>`;
+    const disp = metric === 'views'
+      ? (val >= 1000000 ? (val/1000000).toFixed(1)+'M views' : val >= 1000 ? (val/1000).toFixed(1)+'K views' : val + ' views')
+      : '⭐ ' + val.toFixed(1);
+    const poster = f.thumbnail_url
+      ? `<img class="top-film-poster" src="${escHtml(f.thumbnail_url)}" alt="${escHtml(f.title)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+      : '';
+    const ph = `<div class="top-film-poster-ph" style="${f.thumbnail_url ? 'display:none' : ''}">&#127909;</div>`;
+    return `<div class="top-film-card">
+      <div class="top-film-rank ${rankClass(i)}">${i + 1}</div>
+      ${poster}${ph}
+      <div class="top-film-info">
+        <div class="top-film-title" title="${escHtml(f.title)}">${escHtml(f.title)}</div>
+        <div class="top-film-stat">${disp}</div>
+      </div>
+    </div>`;
   }).join('');
 }
 
