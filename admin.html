@@ -1444,18 +1444,35 @@ function genreBadges(genre) {
 // ── LOAD FILMS ────────────────────────────────────────────────
 async function loadFilms() {
   let films;
+  let realTotal = null;
   try {
-    films = await supaFetch('films?select=*&order=created_at.desc&limit=200');
-    if (films.length === 200) console.warn('loadFilms: hit limit=200 — some films may be missing. Raise the limit or implement pagination.');
+    // Fetch real total count from Supabase (no limit)
+    const countRes = await fetch(`${SUPABASE_URL}/rest/v1/films?select=id`, {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SESSION_TOKEN || SUPABASE_KEY}`,
+        'Prefer': 'count=exact',
+        'Range': '0-0',
+        'Cache-Control': 'no-cache'
+      }
+    });
+    const contentRange = countRes.headers.get('Content-Range');
+    if (contentRange) {
+      const match = contentRange.match(/\/(\d+)$/);
+      if (match) realTotal = parseInt(match[1]);
+    }
+    // Fetch up to 1000 films for local use (table, stats, chart)
+    films = await supaFetch('films?select=*&order=created_at.desc&limit=1000');
   } catch(e) {
     films = localFilms;
     toast('Using local data (Supabase error)', true);
   }
   allFilmsCache = films;
 
-  // Stats
+  // Stats — use real DB total if available, else local count
+  const displayTotal = realTotal !== null ? realTotal : films.length;
   const totalViews = films.reduce((a, f) => a + (f.views || 0), 0);
-  document.getElementById('stat-total').textContent    = films.length;
+  document.getElementById('stat-total').textContent    = displayTotal.toLocaleString();
   document.getElementById('stat-featured').textContent = films.filter(f => f.featured).length;
   document.getElementById('stat-video').textContent    = films.filter(f => f.hls_url).length;
   document.getElementById('stat-views').textContent    = totalViews > 999 ? (totalViews/1000).toFixed(1)+'K' : totalViews;
@@ -2219,25 +2236,40 @@ function toast(msg, err = false) {
 
 // ── Views Analytics Chart ────────────────────────────────────
 function renderChart() {
-  const metric  = document.getElementById('chartMetric')?.value || 'views';
-  const films   = [...allFilmsCache]
-    .filter(f => metric === 'imdb_rating' ? f.imdb_rating : (f.views || 0) > 0)
-    .sort((a, b) => (b[metric] || 0) - (a[metric] || 0))
+  const metricSel = document.getElementById('chartMetric');
+  let metric = metricSel ? (metricSel.value || 'views') : 'views';
+
+  // Auto-switch to imdb_rating if no films have views yet
+  const hasViews = allFilmsCache.some(f => (f.views || 0) > 0);
+  if (metric === 'views' && !hasViews) {
+    metric = 'imdb_rating';
+    if (metricSel) metricSel.value = 'imdb_rating';
+  }
+
+  const films = [...allFilmsCache]
+    .filter(f => (parseFloat(f[metric]) || 0) > 0)
+    .sort((a, b) => (parseFloat(b[metric]) || 0) - (parseFloat(a[metric]) || 0))
     .slice(0, 10);
 
   const bars = document.getElementById('chartBars');
-  if (!bars || !films.length) return;
+  if (!bars) return;
 
+  if (!films.length) {
+    bars.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:116px;color:var(--muted);font-size:13px;">No data yet — add films to see the chart</div>';
+    return;
+  }
+
+  const CHART_H = 116; // px
   const max = Math.max(...films.map(f => parseFloat(f[metric]) || 0)) || 1;
 
   bars.innerHTML = films.map(f => {
     const val  = parseFloat(f[metric]) || 0;
-    const pct  = Math.round((val / max) * 100);
+    const px   = Math.max(Math.round((val / max) * CHART_H), 3);
     const disp = metric === 'views' ? (val > 999 ? (val/1000).toFixed(1)+'K' : val) : val.toFixed(1);
     const name = f.title.length > 12 ? f.title.slice(0, 11) + '…' : f.title;
     return `
       <div class="chart-bar-col">
-        <div class="chart-bar" style="height:${Math.max(pct, 2)}%" data-val="${disp}"></div>
+        <div class="chart-bar" style="height:${px}px" data-val="${disp}"></div>
         <div class="chart-label" title="${f.title}">${name}</div>
       </div>`;
   }).join('');
