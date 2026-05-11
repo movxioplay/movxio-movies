@@ -13,5 +13,24 @@ Disallow: /watch.html$
 # Allow film pages with IDs
 Allow: /watch.html?id=
 
+# Allow social media crawlers (OG preview scraping)
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Facebot
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: TelegramBot
+Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
 # Sitemap location
 Sitemap: https://www.movxio.com/sitemap.xml
