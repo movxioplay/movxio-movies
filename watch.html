@@ -3429,6 +3429,7 @@ function closeShare() {
 function shareWhatsApp() { window.open(`https://wa.me/?text=${encodeURIComponent((currentFilm ? currentFilm.title + ' — ' : '') + 'Watch free on MOVXIO: ' + location.href)}`, '_blank'); }
 function shareTwitter()  { window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent((currentFilm ? 'Watching ' + currentFilm.title + ' on MOVXIO — free! ' : '') + location.href)}`, '_blank'); }
 function shareFacebook() { window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(location.href)}`, '_blank'); }
+function shareTelegram() { window.open(`https://t.me/share/url?url=${encodeURIComponent(location.href)}&text=${encodeURIComponent((currentFilm ? currentFilm.title + ' — ' : '') + 'Watch free on MOVXIO: ')}`, '_blank'); }
 function copyShareLink() {
   const linkInput = document.getElementById('shareLinkInput');
   if (!linkInput) return;
@@ -3851,6 +3852,12 @@ init();
       <div onclick="shareFacebook()" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;">
         <div style="width:36px;height:36px;border-radius:8px;background:rgba(24,119,242,0.15);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;flex-shrink:0;">f</div>
         <div><div style="font-size:14px;font-weight:600;">Facebook</div><div style="font-size:12px;color:var(--text-muted);">Share on your timeline</div></div>
+      </div>
+      <div onclick="shareTelegram()" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;">
+        <div style="width:36px;height:36px;border-radius:8px;background:rgba(42,171,238,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#2AABEE" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L8.32 14.28l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.828.279z"/></svg>
+        </div>
+        <div><div style="font-size:14px;font-weight:600;">Telegram</div><div style="font-size:12px;color:var(--text-muted);">Share to chat or channel</div></div>
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:12px;">
