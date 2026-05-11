@@ -62,7 +62,7 @@ async function fetchFilmById(id) {
 async function fetchFilmBySlug(slug) {
   const url = `${SUPABASE_URL}/rest/v1/films`
     + `?slug=eq.${encodeURIComponent(slug)}`
-    + `&select=id,title,slug,description,thumbnail_url,genre,year,imdb_rating`
+    + `&select=id,title,slug,description,thumbnail_url,backdrop_url,genre,year,imdb_rating`
     + `&limit=1`;
   const res = await fetch(url, { headers: supaHeaders() });
   if (!res.ok) return null;
@@ -152,7 +152,9 @@ class OGRewriter {
     const desc   = film.description
       ? film.description.slice(0, 160)
       : `Watch ${title} free on ${SITE_NAME} — no account needed.`;
-    const image  = film.thumbnail_url || DEFAULT_IMG;
+    // Prefer landscape backdrop for FB/Telegram (1280×720); fall back to portrait poster
+    const image       = film.backdrop_url || film.thumbnail_url || DEFAULT_IMG;
+    const isLandscape = !!film.backdrop_url;
 
     this.data = {
       pageTitle:           `${title}${year} — Watch Online Free | ${SITE_NAME}`,
@@ -160,8 +162,8 @@ class OGRewriter {
       'og:title':          `${title}${year} — ${SITE_NAME}`,
       'og:description':    desc,
       'og:image':          image,
-      'og:image:width':    '600',
-      'og:image:height':   '900',
+      'og:image:width':    isLandscape ? '1280' : '600',
+      'og:image:height':   isLandscape ? '720'  : '900',
       'og:image:alt':      `${title} poster`,
       'og:url':            canonicalUrl,
       'og:type':           'video.movie',
