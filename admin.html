@@ -1563,7 +1563,7 @@ function renderFilmTable(films) {
         <strong>${escHtml(f.title)}</strong>
         <span class="badge-${f.type === 'series' ? 'series' : 'movie'}" style="margin-left:6px;font-size:9px;">${f.type === 'series' ? '📺 Series' : '🎬'}</span>
         ${f.director ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;">Dir: ${escHtml(f.director)}</div>` : ''}
-        ${f.type === 'series' && f.total_seasons ? `<div style="font-size:11px;color:var(--blue);margin-top:2px;">${f.total_seasons} Season${f.total_seasons > 1 ? 's' : ''}</div>` : ''}
+        ${f.type === 'series' && f.total_seasons ? `<div style="font-size:11px;color:var(--blue);margin-top:2px;">${f.total_seasons} Season${f.total_seasons > 1 ? 's' : ''}${f.series_status ? ' · <span style="color:' + (f.series_status==='ongoing'?'var(--green)':f.series_status==='completed'?'var(--muted)':'var(--red)') + ';font-weight:600;">' + f.series_status.charAt(0).toUpperCase() + f.series_status.slice(1) + '</span>' : ''}</div>` : ''}
         ${f.badge ? `<span style="font-size:9px;background:rgba(232,184,75,0.15);color:var(--gold);padding:1px 6px;border-radius:3px;font-weight:700;">${escHtml(f.badge)}</span>` : ''}
       </td>
       <td>${genreBadges(f.genre)}</td>
@@ -1687,6 +1687,8 @@ function editFilm(film) {
       renderSeasonTabs();
     }
     if (film.id) loadEpisodesForSeries(film.id);
+    const ssEl = document.getElementById('f-series-status');
+    if (ssEl) ssEl.value = film.series_status || 'ongoing';
   }
 
   document.getElementById('film-form').classList.add('open');
