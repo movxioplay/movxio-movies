@@ -275,6 +275,9 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 .ep-field textarea { resize: vertical; min-height: 60px; }
 .btn-add-episode { background: none; border: 1px dashed var(--border); color: var(--muted); padding: 11px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all .2s; width: 100%; text-align: center; }
 .btn-add-episode:hover { border-color: var(--gold); color: var(--gold); }
+.ep-insert-btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 28px; margin: -2px 0; opacity: 0; transition: opacity .2s; cursor: pointer; background: none; border: 1px dashed rgba(232,184,75,0.4); border-radius: 6px; color: var(--gold); font-size: 11px; font-family: 'DM Sans', sans-serif; width: 100%; }
+.ep-insert-btn:hover { opacity: 1 !important; background: rgba(232,184,75,0.06); }
+.episode-list:hover .ep-insert-btn { opacity: 0.4; }
 
 /* Episode count badge on film table */
 .badge-series { background: rgba(61,127,255,0.1); color: var(--blue); border: 1px solid rgba(61,127,255,0.2); padding: 3px 9px; border-radius: 8px; font-size: 11px; }
@@ -2167,30 +2170,73 @@ function saveCurrentSeasonEpisodes() {
   episodesBySeason[currentSeason] = eps;
 }
 
+// Renumber all episodes 1,2,3... with no gaps after insert/delete
+function renumberEpisodes() {
+  saveCurrentSeasonEpisodes();
+  var eps = episodesBySeason[currentSeason] || [];
+  eps.sort(function(a,b){ return a.episode - b.episode; });
+  eps.forEach(function(ep, i) { ep.episode = i + 1; });
+  episodesBySeason[currentSeason] = eps;
+  epCounter = eps.length;
+  renderEpisodeList();
+  renderSeasonTabs();
+}
+
+// Insert a blank episode after a given position index (0 = before first)
+function insertEpisodeAt(afterIndex) {
+  saveCurrentSeasonEpisodes();
+  if (!episodesBySeason[currentSeason]) episodesBySeason[currentSeason] = [];
+  var eps = episodesBySeason[currentSeason];
+  // Shift all episodes after the insert point up by 1
+  eps.forEach(function(ep) { if (ep.episode > afterIndex) ep.episode++; });
+  // Insert blank at afterIndex+1
+  eps.push({ episode: afterIndex + 1 });
+  eps.sort(function(a,b){ return a.episode - b.episode; });
+  episodesBySeason[currentSeason] = eps;
+  epCounter = eps.length;
+  renderEpisodeList();
+  renderSeasonTabs();
+  setTimeout(function() {
+    var newRow = document.querySelector('.episode-row[data-ep="' + (afterIndex + 1) + '"]');
+    if (newRow) newRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 60);
+}
+
+function buildInsertBtn(afterIndex) {
+  return '<button type="button" class="ep-insert-btn" onclick="insertEpisodeAt(' + afterIndex + ')" title="Insert episode here">' +
+    '<svg width="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>' +
+    ' Insert episode here</button>';
+}
+
 function renderEpisodeList() {
   const list = document.getElementById('episodeList');
   if (!list) return;
-  // fix #5 — only snapshot DOM edits if there are actual rendered rows to read from.
-  // Skipping the snapshot on an empty list prevents wiping episodesBySeason on first load.
+  // Only snapshot DOM edits when actual rows are already rendered (prevent wiping on first load)
   if (list.querySelectorAll('.episode-row[data-ep]').length > 0) {
     saveCurrentSeasonEpisodes();
   }
   const eps = episodesBySeason[currentSeason] || [];
-  list.innerHTML = eps.map(function(ep) { return buildEpisodeRow(ep.episode, ep); }).join('');
-  epCounter = eps.length ? Math.max.apply(null, eps.map(function(e){return e.episode;})) : 0;
+  var html = buildInsertBtn(0); // slot before episode 1
+  eps.forEach(function(ep, i) {
+    html += buildEpisodeRow(ep.episode, ep);
+    html += buildInsertBtn(i + 1); // slot after each episode
+  });
+  list.innerHTML = html;
+  epCounter = eps.length;
 }
 
 function addEpisodeRow() {
   saveCurrentSeasonEpisodes();
-  epCounter++;
   if (!episodesBySeason[currentSeason]) episodesBySeason[currentSeason] = [];
-  episodesBySeason[currentSeason].push({ episode: epCounter });
-  const list = document.getElementById('episodeList');
-  if (!list) return;
-  const div = document.createElement('div');
-  div.innerHTML = buildEpisodeRow(epCounter, {});
-  list.appendChild(div.firstElementChild);
+  var nextEp = (episodesBySeason[currentSeason].length || 0) + 1;
+  episodesBySeason[currentSeason].push({ episode: nextEp });
+  epCounter = nextEp;
+  renderEpisodeList();
   renderSeasonTabs();
+  setTimeout(function() {
+    var list = document.getElementById('episodeList');
+    if (list && list.lastElementChild) list.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 60);
 }
 
 function buildEpisodeRow(ep, d) {
@@ -2216,18 +2262,16 @@ function buildEpisodeRow(ep, d) {
 }
 
 function deleteEpisodeRow(ep) {
-  if (!confirm('Remove Episode ' + ep + '?')) return;
-  const row = document.querySelector('.episode-row[data-ep="' + ep + '"]');
+  if (!confirm('Remove Episode ' + ep + '? Remaining episodes will be renumbered.')) return;
+  var row = document.querySelector('.episode-row[data-ep="' + ep + '"]');
   if (row) {
-    // fix #4 — remember the DB id so we can DELETE it on save
-    const dbId = row.dataset.dbid;
+    var dbId = row.dataset.dbid;
     if (dbId) deletedEpisodeIds.push(dbId);
-    row.remove();
   }
   if (episodesBySeason[currentSeason]) {
     episodesBySeason[currentSeason] = episodesBySeason[currentSeason].filter(function(e){ return e.episode !== ep; });
   }
-  renderSeasonTabs();
+  renumberEpisodes(); // closes gaps and re-renders
 }
 
 function getAllEpisodes() {
