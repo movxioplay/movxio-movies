@@ -1787,6 +1787,10 @@ async function saveFilm() {
   const title = document.getElementById('f-title').value.trim();
   if (!title) { toast('Title is required', true); return; }
 
+  // Prevent double-submit while saving
+  const saveBtn = document.querySelector('#film-form .btn-primary');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+
   const durMins = parseInt(document.getElementById('f-duration').value) || null;
   const imdbVal = parseFloat(document.getElementById('f-imdb').value) || null;
 
@@ -1813,53 +1817,73 @@ async function saveFilm() {
     chapters:      getChapters(),
     duration_secs: durMins ? durMins * 60 : null,
     total_seasons: currentType === 'series' ? (parseInt((document.getElementById('f-seasons')||{}).value)||1) : null,
-    series_status: currentType === 'series' ? (document.getElementById('f-series-status')?.value || null) : null, // fix #7
+    series_status: currentType === 'series' ? (document.getElementById('f-series-status')?.value || null) : null,
   };
 
   try {
     const cleanData = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== null && v !== undefined));
-    let result = null;
+    let seriesId = editingId || null;
+
     if (editingId) {
-      await supaFetch(`films?id=eq.${editingId}`, 'PATCH', cleanData);
+      await supaFetch('films?id=eq.' + editingId, 'PATCH', cleanData);
+      // PATCH with return=representation returns [] — keep editingId as the series ID
+      seriesId = editingId;
     } else {
-      result = await supaFetch('films', 'POST', cleanData);
+      const result = await supaFetch('films', 'POST', cleanData);
+      // POST returns [{id: '...', ...}]
+      seriesId = result && result[0] ? result[0].id : null;
+      if (!seriesId) throw new Error('Supabase did not return the new record ID. Check your RLS policies allow INSERT and return data.');
     }
+
     if (currentType === 'series') {
-      // fix #2 — verify we have a real ID before saving episodes
-      const seriesId = editingId || (result && result[0] ? result[0].id : null);
-      if (!seriesId) {
-        toast('Series saved but episode link failed — no ID returned. Re-open to retry.', true);
-      } else {
-        // fix #3 — surface episode save failures instead of swallowing them
-        try { await saveEpisodes(seriesId); }
-        catch(e) { toast('Series saved, but some episodes failed: ' + e.message, true); }
+      const epErrors = await saveEpisodes(seriesId);
+      if (epErrors.length) {
+        toast('Series saved, but ' + epErrors.length + ' episode(s) had errors: ' + epErrors[0], true);
       }
     }
-    toast(editingId ? (currentType==='series'?'Series updated!':'Film updated!') : (currentType==='series'?'Series added!':'Film added!'));
+
+    toast(editingId
+      ? (currentType === 'series' ? 'Series updated ✓' : 'Film updated ✓')
+      : (currentType === 'series' ? 'Series added ✓'   : 'Film added ✓'));
     closeForm();
     loadFilms();
   } catch(e) {
-    // Fallback to local
-    if (editingId) {
-      const i = localFilms.findIndex(f => f.id === editingId);
-      if (i >= 0) localFilms[i] = { ...localFilms[i], ...data };
-    } else {
-      localFilms.unshift({ id: 'f' + Date.now(), ...data });
+    // Show the real error so it’s debuggable
+    toast('Save failed: ' + e.message, true);
+    // Local fallback only for movies (episodes can’t be stored locally)
+    if (currentType !== 'series') {
+      if (editingId) {
+        const i = localFilms.findIndex(f => f.id === editingId);
+        if (i >= 0) localFilms[i] = { ...localFilms[i], ...data };
+      } else {
+        localFilms.unshift({ id: 'f' + Date.now(), ...data });
+      }
+      saveLocal();
+      closeForm();
+      allFilmsCache = localFilms;
+      renderFilmTable(localFilms);
     }
-    saveLocal();
-    toast(editingId ? 'Updated (local)!' : 'Added (local)!');
-    closeForm();
-    allFilmsCache = localFilms;
-    renderFilmTable(localFilms);
+  } finally {
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Film'; }
   }
 }
 
 // ── DELETE FILM ───────────────────────────────────────────────
 async function deleteFilm(id) {
-  if (!confirm('Delete this film? This cannot be undone.')) return;
+  const film = allFilmsCache.find(f => f.id === id);
+  const isSeries = film && film.type === 'series';
+  const confirmMsg = isSeries
+    ? 'Delete this series and all its episodes? This cannot be undone.'
+    : 'Delete this film? This cannot be undone.';
+  if (!confirm(confirmMsg)) return;
   try {
-    await supaFetch(`films?id=eq.${id}`, 'DELETE');
-    toast('Deleted!');
+    // Delete episodes first if it's a series (in case no DB cascade is set)
+    if (isSeries) {
+      try { await supaFetch('episodes?series_id=eq.' + id, 'DELETE'); }
+      catch(e) { console.warn('Episode cascade delete failed (may be handled by DB):', e.message); }
+    }
+    await supaFetch('films?id=eq.' + id, 'DELETE');
+    toast(isSeries ? 'Series deleted!' : 'Deleted!');
     loadFilms();
   } catch(e) {
     localFilms = localFilms.filter(f => f.id !== id);
@@ -1902,8 +1926,8 @@ function renderBanners(banners) {
     <div class="banner-card">
       ${b.image_url ? `<img class="banner-thumb" src="${b.image_url}" alt="">` : `<div class="banner-thumb-ph">🖼️</div>`}
       <div class="banner-info">
-        <div class="banner-title-text">${b.title || 'Untitled Banner'}</div>
-        <div class="banner-meta">${b.subtitle || ''} ${b.active ? '· <span style="color:var(--green);">Active</span>' : '· <span style="color:var(--muted);">Inactive</span>'} · Order: ${b.sort_order ?? 0}</div>
+        <div class="banner-title-text">${escHtml(b.title || 'Untitled Banner')}</div>
+        <div class="banner-meta">${escHtml(b.subtitle || '')} ${b.active ? '· <span style="color:var(--green);">Active</span>' : '· <span style="color:var(--muted);">Inactive</span>'} · Order: ${b.sort_order ?? 0}</div>
       </div>
       <div class="banner-actions">
         <button class="btn-edit" onclick="editBannerById('${b.id}')">Edit</button>
@@ -2257,7 +2281,9 @@ async function loadEpisodesForSeries(seriesId) {
 }
 
 async function saveEpisodes(seriesId) {
-  // fix #4 — delete episodes that were removed in the UI
+  const errors = [];
+
+  // fix #4 — delete episodes removed in the UI
   for (const dbId of deletedEpisodeIds) {
     try { await supaFetch('episodes?id=eq.' + dbId, 'DELETE'); }
     catch(e) { console.error('Delete ep error:', e); }
@@ -2276,8 +2302,12 @@ async function saveEpisodes(seriesId) {
     try {
       if (ep.id) await supaFetch('episodes?id=eq.' + ep.id, 'PATCH', clean);
       else await supaFetch('episodes', 'POST', clean);
-    } catch(e) { console.error('Save ep error:', e); }
+    } catch(e) {
+      console.error('Save ep error:', e);
+      errors.push('S' + ep.season + 'E' + ep.episode + ': ' + e.message);
+    }
   }
+  return errors; // caller decides whether to surface these
 }
 
 function toast(msg, err = false) {
@@ -2406,20 +2436,23 @@ async function bulkDelete() {
 
 // ── Duplicate Film ───────────────────────────────────────────
 async function dupeFilm(film) {
+  const isSeries = film.type === 'series';
+  if (isSeries && !confirm('Duplicate this series? Note: episodes will NOT be copied — you\'ll need to re-add them to the duplicate.')) return;
   const clone = { ...film };
   delete clone.id;
   delete clone.created_at;
   delete clone.updated_at;
-  clone.title  = 'Copy of ' + clone.title;
-  clone.status = 'draft';
-  clone.views  = 0;
+  clone.title    = 'Copy of ' + clone.title;
+  clone.status   = 'draft';
+  clone.views    = 0;
   clone.featured = false;
   try {
     await supaFetch('films', 'POST', clone);
-    toast('Film duplicated as Draft ✓');
+    toast(isSeries ? 'Series duplicated as Draft (no episodes copied) ✓' : 'Film duplicated as Draft ✓');
     loadFilms();
   } catch(e) {
-    // local fallback
+    if (isSeries) { toast('Duplicate failed: ' + e.message, true); return; }
+    // local fallback for movies only
     clone.id = 'local_' + Date.now();
     localFilms.unshift(clone);
     saveLocal();
