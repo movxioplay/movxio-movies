@@ -1824,7 +1824,17 @@ async function saveFilm() {
     } else {
       result = await supaFetch('films', 'POST', cleanData);
     }
-    if (currentType === 'series') { try { await saveEpisodes(editingId || (result && result[0] ? result[0].id : null)); } catch(e){} }
+    if (currentType === 'series') {
+      // fix #2 — verify we have a real ID before saving episodes
+      const seriesId = editingId || (result && result[0] ? result[0].id : null);
+      if (!seriesId) {
+        toast('Series saved but episode link failed — no ID returned. Re-open to retry.', true);
+      } else {
+        // fix #3 — surface episode save failures instead of swallowing them
+        try { await saveEpisodes(seriesId); }
+        catch(e) { toast('Series saved, but some episodes failed: ' + e.message, true); }
+      }
+    }
     toast(editingId ? (currentType==='series'?'Series updated!':'Film updated!') : (currentType==='series'?'Series added!':'Film added!'));
     closeForm();
     loadFilms();
@@ -2072,6 +2082,7 @@ let currentSeason    = 1;
 let totalSeasons     = 1;
 let episodesBySeason = {};
 let epCounter        = 0;
+let deletedEpisodeIds = []; // fix #4 — track DB IDs of removed episodes for DELETE on save
 
 function setType(type) {
   currentType = type;
@@ -2131,6 +2142,8 @@ function saveCurrentSeasonEpisodes() {
 }
 
 function renderEpisodeList() {
+  // fix #5 — snapshot any in-progress DOM edits before wiping the list
+  saveCurrentSeasonEpisodes();
   const list = document.getElementById('episodeList');
   if (!list) return;
   const eps = episodesBySeason[currentSeason] || [];
@@ -2176,7 +2189,12 @@ function buildEpisodeRow(ep, d) {
 function deleteEpisodeRow(ep) {
   if (!confirm('Remove Episode ' + ep + '?')) return;
   const row = document.querySelector('.episode-row[data-ep="' + ep + '"]');
-  if (row) row.remove();
+  if (row) {
+    // fix #4 — remember the DB id so we can DELETE it on save
+    const dbId = row.dataset.dbid;
+    if (dbId) deletedEpisodeIds.push(dbId);
+    row.remove();
+  }
   if (episodesBySeason[currentSeason]) {
     episodesBySeason[currentSeason] = episodesBySeason[currentSeason].filter(function(e){ return e.episode !== ep; });
   }
@@ -2188,9 +2206,10 @@ function getAllEpisodes() {
   const all = [];
   for (let s = 1; s <= totalSeasons; s++) {
     (episodesBySeason[s] || []).forEach(function(ep) {
-      if (!ep.title) return;
+      // fix #1 — don't silently drop untitled episodes; use a default title
+      const epTitle = ep.title || ('Episode ' + ep.episode);
       const obj = {
-        season: s, episode: ep.episode, title: ep.title,
+        season: s, episode: ep.episode, title: epTitle,
         description: ep.description || null,
         hls_url: ep.hls_url || null,
         thumbnail_url: ep.thumbnail_url || null,
@@ -2207,6 +2226,7 @@ function getAllEpisodes() {
 function resetEpisodeManager() {
   currentSeason = 1; totalSeasons = 1;
   episodesBySeason = {}; epCounter = 0;
+  deletedEpisodeIds = []; // fix #6 — clear stale delete queue when switching series
   const el = document.getElementById('f-seasons');
   if (el) el.value = 1;
   renderSeasonTabs();
@@ -2237,6 +2257,13 @@ async function loadEpisodesForSeries(seriesId) {
 }
 
 async function saveEpisodes(seriesId) {
+  // fix #4 — delete episodes that were removed in the UI
+  for (const dbId of deletedEpisodeIds) {
+    try { await supaFetch('episodes?id=eq.' + dbId, 'DELETE'); }
+    catch(e) { console.error('Delete ep error:', e); }
+  }
+  deletedEpisodeIds = [];
+
   const eps = getAllEpisodes();
   for (const ep of eps) {
     const data = {
