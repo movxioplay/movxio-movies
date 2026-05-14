@@ -2154,7 +2154,7 @@ function saveCurrentSeasonEpisodes() {
   rows.forEach(function(row) {
     const ep = row.dataset.ep;
     eps.push({
-      id: row.dataset.dbid || null,
+      id: (row.dataset.dbid && row.dataset.dbid !== '') ? row.dataset.dbid : null,
       episode: parseInt(ep),
       title: (document.getElementById('ep-title-' + ep) || {}).value || '',
       description: (document.getElementById('ep-desc-' + ep) || {}).value || '',
@@ -2168,10 +2168,13 @@ function saveCurrentSeasonEpisodes() {
 }
 
 function renderEpisodeList() {
-  // fix #5 — snapshot any in-progress DOM edits before wiping the list
-  saveCurrentSeasonEpisodes();
   const list = document.getElementById('episodeList');
   if (!list) return;
+  // fix #5 — only snapshot DOM edits if there are actual rendered rows to read from.
+  // Skipping the snapshot on an empty list prevents wiping episodesBySeason on first load.
+  if (list.querySelectorAll('.episode-row[data-ep]').length > 0) {
+    saveCurrentSeasonEpisodes();
+  }
   const eps = episodesBySeason[currentSeason] || [];
   list.innerHTML = eps.map(function(ep) { return buildEpisodeRow(ep.episode, ep); }).join('');
   epCounter = eps.length ? Math.max.apply(null, eps.map(function(e){return e.episode;})) : 0;
