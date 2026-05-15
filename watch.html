@@ -1302,9 +1302,6 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.ep-title {
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
 .episode-item.active .ep-desc { color: var(--text-dim); }
 .ep-watched-dot {
   width: 6px; height: 6px; border-radius: 50%;
@@ -2052,6 +2049,7 @@ let player = null;
 let currentFilm = null;
 let controlsTimer = null;
 let isDragging = false;
+let _necFired = false;
 
 // ── Update page meta tags (title, OG, canonical) ──────────────
 function updatePageMeta(film) {
@@ -2091,7 +2089,9 @@ function maybeRedirectToSlug(film) {
 
 // ── Film card URL helper ───────────────────────────────────────
 function filmUrl(f) {
-  return f && f.slug ? `/film/${f.slug}` : `/watch.html?id=${f.id}`;
+  if (!f) return '#';
+  if (f.slug) return '/film/' + encodeURIComponent(f.slug).replace(/%2F/g, '/');
+  return '/watch.html?id=' + encodeURIComponent(f.id);
 }
 
 // ── Fetch ─────────────────────────────────────────────────────
@@ -2116,7 +2116,7 @@ async function fetchSingleFilm(identifier) {
 async function fetchFilms() {
   if (!CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_KEY) return DEMO;
   try {
-    const res = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/films?select=*&order=views.desc&limit=150`, {
+    const res = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/films?select=id,title,slug,thumbnail_url,year,imdb_rating,genre,views,type,director,actors,country&order=views.desc&limit=150`, {
       headers: { 'apikey': CONFIG.SUPABASE_KEY, 'Authorization': `Bearer ${CONFIG.SUPABASE_KEY}` }
     });
     return res.ok ? await res.json() : DEMO;
@@ -2897,14 +2897,43 @@ function initPlayer(film, videoUrl, episode) {
     showControls();
   });
 
+  // Initialise per-instance state BEFORE registering event handlers
+  let lastSave = 0;
+  _necFired = false;
+
   player.on('timeupdate', () => {
-    if (isDragging) return;
-    const t = player.currentTime();
-    const d = player.duration() || 0;
-    const pct = d > 0 ? (t / d * 100) : 0;
-    progressFill.style.width = `${pct}%`;
-    progressThumb.style.left = `${pct}%`;
-    document.getElementById('timeNow').textContent = formatTime(t);
+    // — Progress UI —
+    if (!isDragging) {
+      const t = player.currentTime();
+      const d = player.duration() || 0;
+      const pct = d > 0 ? (t / d * 100) : 0;
+      progressFill.style.width = `${pct}%`;
+      progressThumb.style.left = `${pct}%`;
+      document.getElementById('timeNow').textContent = formatTime(t);
+    }
+
+    // — Throttled position save —
+    if (!player.paused()) {
+      const now = Date.now();
+      if (now - lastSave >= CONFIG.SAVE_INTERVAL * 1000) {
+        lastSave = now;
+        const pos = Math.floor(player.currentTime());
+        const dur = Math.floor(player.duration() || 0);
+        if (pos > 0) { if (episode) saveEpisodePosition(film.id, episode, pos, dur); else savePosition(film.id, pos, dur); }
+      }
+    }
+
+    // — Auto-next episode countdown —
+    if (episode && !_necFired) {
+      const dur = player.duration() || 0;
+      const remaining = dur - (player.currentTime() || 0);
+      if (dur > 0 && remaining > 0 && remaining <= 30) {
+        _necFired = true;
+        var idx  = allEpisodes.findIndex(function(e) { return e.id === episode.id; });
+        var next = allEpisodes[idx + 1];
+        if (next) showNextEpCountdown(next);
+      }
+    }
   });
 
   player.on('progress', () => {
@@ -2914,33 +2943,6 @@ function initPlayer(film, videoUrl, episode) {
   });
 
   player.on('volumechange', updateVolumeUI);
-
-  // Throttled save
-  let lastSave = 0;
-  let _necFired = false;
-  player.on('timeupdate', () => {
-    if (!player || player.paused()) return;
-    const now = Date.now();
-    if (now - lastSave < CONFIG.SAVE_INTERVAL * 1000) return;
-    lastSave = now;
-    const pos = Math.floor(player.currentTime());
-    const dur = Math.floor(player.duration() || 0);
-    if (pos > 0) { if (episode) saveEpisodePosition(film.id, episode, pos, dur); else savePosition(film.id, pos, dur); }
-  });
-
-  // Auto-next episode countdown — fires at 30s from end for series episodes
-  player.on('timeupdate', function() {
-    if (!episode || _necFired) return;
-    const dur = player.duration() || 0;
-    const remaining = dur - (player.currentTime() || 0);
-    if (dur > 0 && remaining > 0 && remaining <= 30) {
-      _necFired = true;
-      // Find next episode
-      var idx  = allEpisodes.findIndex(function(e) { return e.id === episode.id; });
-      var next = allEpisodes[idx + 1];
-      if (next) showNextEpCountdown(next);
-    }
-  });
 
   player.one('play', () => incrementViews(film.id));
 
@@ -2962,39 +2964,28 @@ function renderInfo(film) {
   const filmPosterPh = document.getElementById('filmPosterPh');
   if (filmPosterPh) filmPosterPh.style.display = '';
 
-  // Dynamic SEO — safe null checks on every querySelector
-  document.title = `${film.title} — Watch Free on MOVXIO`;
-  const _metaDesc = document.querySelector('meta[name="description"]');
-  if (_metaDesc) _metaDesc.setAttribute('content', `Watch ${film.title} free on MOVXIO. No account needed.`);
-  const _canonical = document.querySelector('link[rel="canonical"]');
-  if (_canonical) _canonical.setAttribute('href', film.slug ? `https://movxio.com/film/${film.slug}` : `https://movxio.com/watch.html?id=${encodeURIComponent(film.id)}`);
-  const _ogUrl    = document.querySelector('meta[property="og:url"]');
-  if (_ogUrl) _ogUrl.setAttribute('content', location.href);
-  const _ogTitle  = document.querySelector('meta[property="og:title"]');
-  if (_ogTitle)  _ogTitle.setAttribute('content', `${film.title} — MOVXIO`);
-  const _ogDesc   = document.querySelector('meta[property="og:description"]');
-  if (_ogDesc)   _ogDesc.setAttribute('content', film.description ? film.description.slice(0,160) : `Watch ${film.title} free on MOVXIO.`);
-  const _ogImg    = document.querySelector('meta[property="og:image"]');
-  const _twImg    = document.querySelector('meta[name="twitter:image"]');
-  // Priority: backdrop (landscape, ideal for social) → thumbnail/poster → nothing
+  // updatePageMeta() in init() handles title, og:*, twitter:*, canonical and meta description.
+  // Here we only handle things updatePageMeta doesn't know about: og:image:alt and image dimensions
+  // (which depend on whether we have a backdrop vs portrait thumbnail), plus JSON-LD.
   const _ogImgSrc = film.backdrop_url || film.thumbnail_url || film.poster_url || '';
-  if (_ogImg && _ogImgSrc) _ogImg.setAttribute('content', _ogImgSrc);
-  if (_twImg && _ogImgSrc) _twImg.setAttribute('content', _ogImgSrc);
+  // og:image — use best available source (backdrop > thumbnail > poster)
+  if (_ogImgSrc) {
+    const _ogImg = document.querySelector('meta[property="og:image"]');
+    const _twImg = document.querySelector('meta[name="twitter:image"]');
+    if (_ogImg) _ogImg.setAttribute('content', _ogImgSrc);
+    if (_twImg) _twImg.setAttribute('content', _ogImgSrc);
+  }
   // og:image:alt — improves accessibility + WhatsApp/Telegram rendering
   let _ogImgAlt = document.querySelector('meta[property="og:image:alt"]');
   if (!_ogImgAlt) { _ogImgAlt = document.createElement('meta'); _ogImgAlt.setAttribute('property','og:image:alt'); document.head.appendChild(_ogImgAlt); }
   _ogImgAlt.setAttribute('content', `${film.title} poster`);
-  // Adjust dimensions: backdrop is 1280×720, poster/thumbnail is portrait ~600×900
+  // Adjust og:image dimensions: backdrop is 1280×720, poster/thumbnail is portrait ~600×900
   const _ogW = document.querySelector('meta[property="og:image:width"]');
   const _ogH = document.querySelector('meta[property="og:image:height"]');
   if (_ogW && _ogH) {
     if (film.backdrop_url) { _ogW.setAttribute('content','1280'); _ogH.setAttribute('content','720'); }
     else { _ogW.setAttribute('content','600'); _ogH.setAttribute('content','900'); }
   }
-  const _twTitle  = document.querySelector('meta[name="twitter:title"]');
-  if (_twTitle)  _twTitle.setAttribute('content', `${film.title} — Watch Free`);
-  const _twDesc   = document.querySelector('meta[name="twitter:description"]');
-  if (_twDesc)   _twDesc.setAttribute('content', film.description ? film.description.slice(0,160) : `Watch ${film.title} free on MOVXIO.`);
 
   // JSON-LD structured data — VideoObject / Movie schema for Google rich results
   const existingLd = document.getElementById('jsonLd');
@@ -3528,7 +3519,7 @@ function renderEpisodeListWatch(season) {
       '<div class="ep-info">' +
         '<div class="ep-num">S'+ep.season+' E'+ep.episode+(watched?' ✓':'')+'</div>' +
         '<div class="ep-title">' + esc(ep.title) + '</div>' +
-        (ep.description ? '<div class="ep-desc">' + esc(ep.description.length > 120 ? ep.description.slice(0, 120) + '…' : ep.description) + '</div>' : '') +
+        (ep.description ? '<div class="ep-desc">' + esc(ep.description) + '</div>' : '') +
         (dur ? '<div class="ep-dur">'+dur+'</div>' : '') +
       '</div>' +
       (watched ? '<div class="ep-watched-dot"></div>' : '') +
@@ -3709,7 +3700,7 @@ function getEpisodeSavedPosition(seriesId, ep) {
     var data = JSON.parse(localStorage.getItem(key)||'null');
     if (!data) return null;
     if (Date.now() - data.ts > 30*24*60*60*1000) return null;
-    if (data.dur && data.pos >= data.dur - 60) return null;
+    if (data.dur && data.pos >= data.dur - 120) return null;
     return data.pos;
   } catch { return null; }
 }
@@ -3758,9 +3749,6 @@ async function init() {
     console.log('[MOVXIO] Films loaded:', films.length, '| identifier:', filmIdentifier);
 
     const film = targetFilm || films[0];
-
-    // Redirect /watch.html?id=UUID → /film/:slug (client-side fallback)
-    maybeRedirectToSlug(film);
 
     // Update page title, OG tags, canonical for regular users
     updatePageMeta(film);
