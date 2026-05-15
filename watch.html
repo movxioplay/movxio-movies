@@ -1296,6 +1296,16 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
   font-family: 'Space Mono', monospace; font-size: 10px;
   color: var(--text-muted); margin-top: 2px;
 }
+.ep-desc {
+  font-size: 11.5px; color: var(--text-muted); line-height: 1.45;
+  margin-top: 3px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ep-title {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.episode-item.active .ep-desc { color: var(--text-dim); }
 .ep-watched-dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--green); flex-shrink: 0;
@@ -3518,6 +3528,7 @@ function renderEpisodeListWatch(season) {
       '<div class="ep-info">' +
         '<div class="ep-num">S'+ep.season+' E'+ep.episode+(watched?' ✓':'')+'</div>' +
         '<div class="ep-title">' + esc(ep.title) + '</div>' +
+        (ep.description ? '<div class="ep-desc">' + esc(ep.description.length > 120 ? ep.description.slice(0, 120) + '…' : ep.description) + '</div>' : '') +
         (dur ? '<div class="ep-dur">'+dur+'</div>' : '') +
       '</div>' +
       (watched ? '<div class="ep-watched-dot"></div>' : '') +
