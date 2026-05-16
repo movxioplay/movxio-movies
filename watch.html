@@ -2763,8 +2763,10 @@ function initPlayer(film, videoUrl, episode) {
     initPlayBtn.style.pointerEvents = 'none'; // click goes through to clickOverlay
   }
 
-  // Add subtitle tracks
-  const subs = film.subtitles || [];
+  // Add subtitle tracks — use episode-level subs if available, else fall back to film-level
+  const subs = (episode && Array.isArray(episode.subtitles) && episode.subtitles.length)
+    ? episode.subtitles
+    : (film.subtitles || []);
   subs.forEach((sub, i) => {
     player.addRemoteTextTrack({ kind:'subtitles', src:sub.url, srclang:sub.lang.toLowerCase().slice(0,2), label:sub.lang, default: false }, false);
   });
