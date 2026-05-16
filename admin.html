@@ -280,6 +280,19 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 .badge-series { background: rgba(61,127,255,0.1); color: var(--blue); border: 1px solid rgba(61,127,255,0.2); padding: 3px 9px; border-radius: 8px; font-size: 11px; }
 .badge-movie  { background: rgba(45,212,160,0.1); color: var(--green); border: 1px solid rgba(45,212,160,0.2); padding: 3px 9px; border-radius: 8px; font-size: 11px; }
 
+/* ── PER-EPISODE SUBTITLES ── */
+.ep-subs-section { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+.ep-subs-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 6px; }
+.ep-sub-list { display: flex; flex-direction: column; gap: 6px; }
+.ep-sub-row { display: flex; gap: 6px; align-items: center; }
+.ep-sub-row select { width: 120px; flex-shrink: 0; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: 6px; font-size: 12px; font-family: 'DM Sans', sans-serif; outline: none; min-height: 34px; }
+.ep-sub-row input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 7px 10px; border-radius: 6px; font-size: 12px; font-family: 'DM Sans', sans-serif; outline: none; min-height: 34px; }
+.ep-sub-row select:focus, .ep-sub-row input:focus { border-color: var(--gold); }
+.btn-add-ep-sub { background: none; border: 1px dashed var(--border); color: var(--muted); padding: 6px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all .2s; margin-top: 4px; }
+.btn-add-ep-sub:hover { border-color: var(--gold); color: var(--gold); }
+.btn-ep-sub-rm { background: transparent; border: 1px solid rgba(230,57,70,0.25); color: var(--red); width: 28px; height: 28px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 13px; transition: all .2s; }
+.btn-ep-sub-rm:hover { background: rgba(230,57,70,0.1); }
+
 /* ── TOAST ── */
 .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--surface); border: 1px solid var(--green); color: var(--green); padding: 12px 22px; border-radius: 8px; font-size: 14px; font-weight: 500; opacity: 0; transition: all .3s; z-index: 999; white-space: nowrap; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -2162,6 +2175,7 @@ function saveCurrentSeasonEpisodes() {
       thumbnail_url: (document.getElementById('ep-thumb-' + ep) || {}).value || '',
       duration_mins: (document.getElementById('ep-dur-' + ep) || {}).value || '',
       air_date: (document.getElementById('ep-date-' + ep) || {}).value || '',
+      subtitles: getEpSubtitles(ep),
     });
   });
   episodesBySeason[currentSeason] = eps;
@@ -2195,6 +2209,13 @@ function addEpisodeRow() {
 
 function buildEpisodeRow(ep, d) {
   d = d || {};
+  // Build existing subtitle rows for this episode
+  var subsHtml = '';
+  var existingSubs = d.subtitles || [];
+  existingSubs.forEach(function(s, i) {
+    var subId = 'ep' + ep + 'sub' + i;
+    subsHtml += buildEpSubRow(ep, subId, s.lang, s.url);
+  });
   return '<div class="episode-row" data-ep="' + ep + '" data-dbid="' + (d.id||'') + '">' +
     '<div class="episode-row-header">' +
       '<div class="ep-number">E' + ep + '</div>' +
@@ -2212,7 +2233,47 @@ function buildEpisodeRow(ep, d) {
         '<input type="number" id="ep-dur-' + ep + '" placeholder="45" value="' + (d.duration_mins||'') + '"></div>' +
       '<div class="ep-field"><label>Air Date</label>' +
         '<input type="date" id="ep-date-' + ep + '" value="' + (d.air_date||'') + '"></div>' +
-    '</div></div>';
+    '</div>' +
+    '<div class="ep-subs-section">' +
+      '<div class="ep-subs-label">Subtitle Tracks</div>' +
+      '<div class="ep-sub-list" id="ep-sub-list-' + ep + '">' + subsHtml + '</div>' +
+      '<button type="button" class="btn-add-ep-sub" onclick="addEpSubRow(' + ep + ')">+ Add Subtitle</button>' +
+    '</div>' +
+  '</div>';
+}
+
+var EP_SUB_LANGS = ['English','Sinhala','Tamil','Hindi','French','Spanish','German','Japanese','Korean','Chinese','Arabic','Portuguese'];
+
+function buildEpSubRow(ep, subId, lang, url) {
+  var opts = EP_SUB_LANGS.map(function(l) {
+    return '<option value="' + l + '"' + (lang === l ? ' selected' : '') + '>' + l + '</option>';
+  }).join('');
+  return '<div class="ep-sub-row" id="' + subId + '">' +
+    '<select class="ep-sub-lang">' + opts + '</select>' +
+    '<input type="url" class="ep-sub-url" placeholder="https://videos.movxio.com/.../subtitles/english.vtt" value="' + (url||'') + '">' +
+    '<button type="button" class="btn-ep-sub-rm" onclick="document.getElementById(\'' + subId + '\').remove()" title="Remove">✕</button>' +
+  '</div>';
+}
+
+function addEpSubRow(ep) {
+  var list = document.getElementById('ep-sub-list-' + ep);
+  if (!list) return;
+  var subId = 'ep' + ep + 'sub' + Date.now();
+  var div = document.createElement('div');
+  div.innerHTML = buildEpSubRow(ep, subId, 'English', '');
+  list.appendChild(div.firstElementChild);
+}
+
+function getEpSubtitles(ep) {
+  var list = document.getElementById('ep-sub-list-' + ep);
+  if (!list) return [];
+  var subs = [];
+  list.querySelectorAll('.ep-sub-row').forEach(function(row) {
+    var lang = (row.querySelector('.ep-sub-lang') || {}).value;
+    var url  = ((row.querySelector('.ep-sub-url') || {}).value || '').trim();
+    if (lang && url) subs.push({ lang: lang, url: url });
+  });
+  return subs;
 }
 
 function deleteEpisodeRow(ep) {
@@ -2244,6 +2305,7 @@ function getAllEpisodes() {
         thumbnail_url: ep.thumbnail_url || null,
         duration_secs: ep.duration_mins ? parseInt(ep.duration_mins)*60 : null,
         air_date: ep.air_date || null,
+        subtitles: (ep.subtitles && ep.subtitles.length) ? ep.subtitles : null,
       };
       if (ep.id) obj.id = ep.id;
       all.push(obj);
@@ -2277,6 +2339,7 @@ async function loadEpisodesForSeries(seriesId) {
         thumbnail_url: ep.thumbnail_url||'',
         duration_mins: ep.duration_secs ? Math.round(ep.duration_secs/60) : '',
         air_date: ep.air_date||'',
+        subtitles: Array.isArray(ep.subtitles) ? ep.subtitles : (ep.subtitles ? JSON.parse(ep.subtitles) : []),
       });
     });
     const el = document.getElementById('f-seasons');
@@ -2301,7 +2364,7 @@ async function saveEpisodes(seriesId) {
       series_id: seriesId, season: ep.season, episode: ep.episode,
       title: ep.title, description: ep.description, hls_url: ep.hls_url,
       thumbnail_url: ep.thumbnail_url, duration_secs: ep.duration_secs,
-      air_date: ep.air_date,
+      air_date: ep.air_date, subtitles: ep.subtitles || [],
     };
     const clean = Object.fromEntries(Object.entries(data).filter(function([,v]){return v!=null && v!=='';}));
     try {
