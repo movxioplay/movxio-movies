@@ -35,21 +35,23 @@
 /* ── Hide VJS built-in subtitle display — we use our own overlay ── */
 .vjs-text-track-display { display: none !important; }
 
-/* ── Custom subtitle overlay ── */
-/* Normal view: absolute inside the player so it doesn't leak below the player */
+/* ── Custom subtitle overlay ──
+   Always position:fixed. overflow:hidden on #playerContainer clips any
+   position:absolute child. JS positionSubOverlay() sets bottom live each
+   frame so subs sit just above the controls bar in normal AND fullscreen. */
 #subOverlay {
-  position: absolute;
-  bottom: 70px;
+  position: fixed;
+  bottom: 60px;
   left: 0; right: 0;
   text-align: center;
-  z-index: 99;
+  z-index: 2147483647;
   pointer-events: none;
   padding: 0 16px;
   display: none;
 }
 #subOverlay span {
   display: inline-block;
-  background: rgba(0,0,0,0.78);
+  background: rgba(0,0,0,0.82);
   color: #ffffff;
   font-family: 'DM Sans', sans-serif;
   font-size: 1.05em;
@@ -61,16 +63,6 @@
   max-width: 90%;
   white-space: pre-line;
 }
-/* Nudge up when controls bar is visible */
-#playerContainer.controls-visible #subOverlay { bottom: 90px; }
-#playerContainer:not(.controls-visible) #subOverlay { bottom: 24px; }
-/* Fullscreen: switch to fixed so it floats above the native fullscreen layer */
-body.is-fullscreen #subOverlay {
-  position: fixed !important;
-  bottom: 80px !important;
-  z-index: 2147483647 !important;
-}
-body.is-fullscreen.subs-controls-visible #subOverlay { bottom: 100px !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.6.1/video.min.js"></script>
 
@@ -1621,9 +1613,6 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
     <!-- Fix 4: blurred poster fallback layer (shown when no backdrop) -->
     <div id="playerBgBlur"></div>
 
-    <!-- Subtitle overlay: absolute inside player (normal), fixed via body class (fullscreen) -->
-    <div id="subOverlay"><span></span></div>
-
     <!-- Fix 3: persistent initial play button (shown before first play) -->
     <div id="initialPlayBtn" style="position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity 0.3s;">
       <div id="initialPlayIcon" style="width:80px;height:80px;border-radius:50%;background:rgba(232,71,63,0.92);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 12px rgba(232,71,63,0.15),0 8px 40px rgba(232,71,63,0.5);transition:transform 0.18s cubic-bezier(0.34,1.56,0.64,1),box-shadow 0.18s;">
@@ -2200,7 +2189,6 @@ const playerContainer = document.getElementById('playerContainer');
 
 function showControls() {
   playerContainer.classList.add('controls-visible');
-  document.body.classList.add('subs-controls-visible');
   clearTimeout(controlsTimer);
   if (player && !player.paused()) {
     controlsTimer = setTimeout(hideControls, 3000);
@@ -2210,7 +2198,6 @@ function showControls() {
 function hideControls() {
   if (isDragging) return;
   playerContainer.classList.remove('controls-visible');
-  document.body.classList.remove('subs-controls-visible');
 }
 
 // ── Click overlay: play/pause + double-tap skip ───────────────
@@ -2890,14 +2877,27 @@ function initPlayer(film, videoUrl, episode) {
   }
 
   // ── Custom Subtitle Renderer ─────────────────────────────────
-  // Reads active VJS text track cues and renders to #subOverlay
-  // Works in normal, Android fullscreen, AND iOS native fullscreen
+  // position:fixed at body level — immune to overflow:hidden on playerContainer.
+  // positionSub() reads the player's live bounding rect each frame so the
+  // subtitle sits correctly above the controls bar in both normal AND fullscreen.
   let _subRafId = null;
   function startSubtitleRenderer() {
     if (_subRafId) cancelAnimationFrame(_subRafId);
     const overlay = document.getElementById('subOverlay');
     const span    = overlay ? overlay.querySelector('span') : null;
     if (!overlay || !span) return;
+
+    function positionSub() {
+      // Player rect in viewport coords
+      const rect = playerContainer.getBoundingClientRect();
+      const controlsVisible = playerContainer.classList.contains('controls-visible');
+      // In fullscreen rect.bottom ≈ window.innerHeight
+      // Controls bar is ~78px tall (progress 22px + row 56px)
+      const ctrlH = controlsVisible ? 82 : 20;
+      // bottom = distance from bottom of viewport to desired subtitle top baseline
+      const bottomPx = (window.innerHeight - rect.bottom) + ctrlH;
+      overlay.style.bottom = Math.max(bottomPx, 16) + 'px';
+    }
 
     function renderSub() {
       const tracks = player.textTracks();
@@ -2915,6 +2915,7 @@ function initPlayer(film, videoUrl, episode) {
           break;
         }
       }
+      positionSub();
       if (text) {
         span.textContent = text;
         overlay.style.display = 'block';
@@ -4151,6 +4152,9 @@ async function submitReport() {
 }
 
 </script>
+
+<!-- ══ SUBTITLE OVERLAY — body level, position:fixed, JS positions it live ══ -->
+<div id="subOverlay"><span></span></div>
 
 <!-- ══ PWA — Service Worker Cleanup ══ -->
 <script>
