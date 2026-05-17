@@ -35,13 +35,14 @@
 /* ── Hide VJS built-in subtitle display — we use our own overlay ── */
 .vjs-text-track-display { display: none !important; }
 
-/* ── Custom subtitle overlay — fixed at body level so it survives iOS/Android fullscreen ── */
+/* ── Custom subtitle overlay ── */
+/* Normal view: absolute inside the player so it doesn't leak below the player */
 #subOverlay {
-  position: fixed;
-  bottom: 80px;
+  position: absolute;
+  bottom: 70px;
   left: 0; right: 0;
   text-align: center;
-  z-index: 2147483647; /* max z-index — float above everything including fullscreen */
+  z-index: 99;
   pointer-events: none;
   padding: 0 16px;
   display: none;
@@ -60,8 +61,16 @@
   max-width: 90%;
   white-space: pre-line;
 }
-/* Subtitle sits higher when controls are visible (controls bar ~56px + progress ~22px) */
-body.subs-controls-visible #subOverlay { bottom: 100px; }
+/* Nudge up when controls bar is visible */
+#playerContainer.controls-visible #subOverlay { bottom: 90px; }
+#playerContainer:not(.controls-visible) #subOverlay { bottom: 24px; }
+/* Fullscreen: switch to fixed so it floats above the native fullscreen layer */
+body.is-fullscreen #subOverlay {
+  position: fixed !important;
+  bottom: 80px !important;
+  z-index: 2147483647 !important;
+}
+body.is-fullscreen.subs-controls-visible #subOverlay { bottom: 100px !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.6.1/video.min.js"></script>
 
@@ -216,7 +225,7 @@ nav {
   background-position: center center !important;
 }
 
-/* Fullscreen: make container fill entire screen */
+/* Fullscreen: make container fill entire screen and stop clipping the subtitle overlay */
 #playerContainer:fullscreen,
 #playerContainer:-webkit-full-screen,
 #playerContainer:-moz-full-screen,
@@ -225,6 +234,7 @@ nav {
   height: 100vh !important;
   aspect-ratio: unset !important;
   max-height: none !important;
+  overflow: visible !important;
 }
 
 /* ── PLAYER CONTAINER ── */
@@ -1611,6 +1621,9 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
     <!-- Fix 4: blurred poster fallback layer (shown when no backdrop) -->
     <div id="playerBgBlur"></div>
 
+    <!-- Subtitle overlay: absolute inside player (normal), fixed via body class (fullscreen) -->
+    <div id="subOverlay"><span></span></div>
+
     <!-- Fix 3: persistent initial play button (shown before first play) -->
     <div id="initialPlayBtn" style="position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity 0.3s;">
       <div id="initialPlayIcon" style="width:80px;height:80px;border-radius:50%;background:rgba(232,71,63,0.92);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 12px rgba(232,71,63,0.15),0 8px 40px rgba(232,71,63,0.5);transition:transform 0.18s cubic-bezier(0.34,1.56,0.64,1),box-shadow 0.18s;">
@@ -2200,60 +2213,76 @@ function hideControls() {
   document.body.classList.remove('subs-controls-visible');
 }
 
-playerContainer.addEventListener('mousemove', showControls);
-playerContainer.addEventListener('touchstart', showControls, { passive: true });
-
 // ── Click overlay: play/pause + double-tap skip ───────────────
+// Desktop: show controls on mouse move over the player
+playerContainer.addEventListener('mousemove', showControls);
+// Uses touchend on mobile (and suppresses the follow-up click) to avoid double-fire.
+// Double-tap window widened to 400ms for older/slower devices.
 let lastTap = 0, lastTapSide = null;
+let _touchFired = false; // flag to swallow the ghost click after touchend
 const clickOverlay = document.getElementById('clickOverlay');
 
-clickOverlay.addEventListener('click', (e) => {
-  if (!player) return;
-  const rect = clickOverlay.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const side = x < rect.width / 3 ? 'left' : x > rect.width * 2/3 ? 'right' : 'center';
-  const now = Date.now();
+function handleOverlayTap(clientX, clientW) {
+  const side = clientX < clientW / 3 ? 'left' : clientX > clientW * 2/3 ? 'right' : 'center';
+  const now  = Date.now();
 
-  if (now - lastTap < 300 && lastTapSide === side) {
-    // Double click/tap
-    if (side === 'left') { seek(-10); showSkipIndicator('back'); }
+  if (now - lastTap < 400 && lastTapSide === side) {
+    // Double tap/click
+    clearTimeout(_tapTimer);
+    if (side === 'left')  { seek(-10); showSkipIndicator('back'); }
     else if (side === 'right') { seek(10); showSkipIndicator('fwd'); }
-    else { toggleFullscreen(); } // double-click center = fullscreen
-    lastTap = 0;
+    else { toggleFullscreen(); }
+    lastTap = 0; lastTapSide = null;
     return;
   }
   lastTap = now;
   lastTapSide = side;
 
-  // Single click — play/pause (with delay to allow double tap)
-  setTimeout(() => {
-    if (Date.now() - lastTap >= 280) togglePlay();
-  }, 300);
+  // Single tap — show controls first; only toggle play if controls were already visible
+  if (!playerContainer.classList.contains('controls-visible')) {
+    showControls();
+    return; // first tap just reveals controls, doesn't pause
+  }
+
+  clearTimeout(_tapTimer);
+  _tapTimer = setTimeout(() => {
+    if (Date.now() - lastTap >= 380) togglePlay();
+  }, 400);
+}
+
+let _tapTimer = null;
+let _touchMoved = false;
+let _touchStartX = 0, _touchStartY = 0;
+
+clickOverlay.addEventListener('touchstart', (e) => {
+  _touchMoved = false;
+  _touchStartX = e.touches[0].clientX;
+  _touchStartY = e.touches[0].clientY;
+  showControls();
+}, { passive: true });
+
+clickOverlay.addEventListener('touchmove', (e) => {
+  // Mark as moved if finger dragged more than 10px — not a tap
+  if (Math.abs(e.touches[0].clientX - _touchStartX) > 10 ||
+      Math.abs(e.touches[0].clientY - _touchStartY) > 10) {
+    _touchMoved = true;
+  }
+}, { passive: true });
+
+clickOverlay.addEventListener('touchend', (e) => {
+  if (!player || _touchMoved) return;
+  _touchFired = true;
+  setTimeout(() => { _touchFired = false; }, 500); // swallow ghost click for 500ms
+  const touch = e.changedTouches[0];
+  const rect  = clickOverlay.getBoundingClientRect();
+  handleOverlayTap(touch.clientX - rect.left, rect.width);
 });
 
-// Touch double-tap support
-let touchTimer = null;
-clickOverlay.addEventListener('touchend', (e) => {
-  if (!player) return;
-  const touch = e.changedTouches[0];
+// Desktop click (suppressed on mobile after touchend)
+clickOverlay.addEventListener('click', (e) => {
+  if (!player || _touchFired) return;
   const rect = clickOverlay.getBoundingClientRect();
-  const x = touch.clientX - rect.left;
-  const side = x < rect.width / 3 ? 'left' : x > rect.width * 2/3 ? 'right' : 'center';
-  const now = Date.now();
-
-  if (now - lastTap < 300 && lastTapSide === side) {
-    clearTimeout(touchTimer);
-    if (side === 'left') { seek(-10); showSkipIndicator('back'); }
-    else if (side === 'right') { seek(10); showSkipIndicator('fwd'); }
-    else { toggleFullscreen(); } // double-tap center = fullscreen
-    lastTap = 0;
-    return;
-  }
-  lastTap = now;
-  lastTapSide = side;
-  touchTimer = setTimeout(() => {
-    if (Date.now() - lastTap >= 280) togglePlay();
-  }, 300);
+  handleOverlayTap(e.clientX - rect.left, rect.width);
 });
 
 // ── Player controls ───────────────────────────────────────────
@@ -2322,14 +2351,17 @@ function updateVolumeUI() {
 // ── Fullscreen ────────────────────────────────────────────────
 document.getElementById('btnFullscreen').addEventListener('click', toggleFullscreen);
 function toggleFullscreen() {
-  // Always request fullscreen on the container div (not the raw video element).
-  // This keeps #subOverlay and all custom UI visible on Android and modern iOS (16.4+).
-  // For older iOS that only supports webkitEnterFullscreen on the video element, the
-  // #subOverlay is now position:fixed at body level so it still floats on top.
+  const vid = player ? player.el().querySelector('video') : null;
   if (!document.fullscreenElement && !document.webkitFullscreenElement) {
     const el = playerContainer;
     const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-    if (req) req.call(el);
+    if (req) {
+      req.call(el);
+    } else if (videojs.browser.IS_IOS && vid && vid.webkitEnterFullscreen) {
+      // Oldest iOS fallback — container fullscreen not supported
+      vid.webkitEnterFullscreen();
+      document.body.classList.add('is-fullscreen');
+    }
   } else {
     const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
     if (exit) exit.call(document);
@@ -2337,11 +2369,26 @@ function toggleFullscreen() {
 }
 function updateFullscreenUI() {
   const fs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  document.body.classList.toggle('is-fullscreen', fs);
   document.getElementById('iconExpand').style.display = fs ? 'none' : '';
   document.getElementById('iconCompress').style.display = fs ? '' : 'none';
 }
 document.addEventListener('fullscreenchange', updateFullscreenUI);
 document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+// Handle oldest iOS webkitfullscreenchange on the video element itself
+// Exposed as window._attachIosFullscreenListeners so initPlayer() can re-attach on episode switch
+window._attachIosFullscreenListeners = function() {
+  if (!player) return;
+  const vid = player.el().querySelector('video');
+  if (!vid) return;
+  vid.addEventListener('webkitbeginfullscreen', () => document.body.classList.add('is-fullscreen'));
+  vid.addEventListener('webkitendfullscreen',   () => { document.body.classList.remove('is-fullscreen'); updateFullscreenUI(); });
+};
+// DOMContentLoaded already fired (this script is inline at end of body), poll directly
+(function pollForPlayer() {
+  if (window.player) { window._attachIosFullscreenListeners(); }
+  else { setTimeout(pollForPlayer, 500); }
+})();
 
 // ── Chapter Markers ──────────────────────────────────────────
 // chapters format: [{time: 0, title: 'Intro'}, {time: 120, title: 'Act 1'}, ...]
@@ -3072,6 +3119,11 @@ function initPlayer(film, videoUrl, episode) {
 
   // Re-attach popunder listener to this new player instance
   if (window._attachPopunderToPlayer) window._attachPopunderToPlayer();
+
+  // Re-attach iOS native fullscreen listeners to the new video element
+  player.one('ready', function() {
+    if (window._attachIosFullscreenListeners) window._attachIosFullscreenListeners();
+  });
 }
 
 
@@ -4099,9 +4151,6 @@ async function submitReport() {
 }
 
 </script>
-
-<!-- ══ SUBTITLE OVERLAY — lives at body level so it survives iOS/Android fullscreen ══ -->
-<div id="subOverlay"><span></span></div>
 
 <!-- ══ PWA — Service Worker Cleanup ══ -->
 <script>
