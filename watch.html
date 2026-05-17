@@ -1212,6 +1212,8 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
   .player-section { height: 100svh; }
   #playerContainer { aspect-ratio: unset; height: 100svh; width: 100vw; }
   .content-outer, .ad-slot, footer, .more-section { display: none; }
+  /* Show subtitle button in mobile landscape fullscreen mode */
+  #fsSubBtn { display: block !important; }
 }
 
 /* ══════════════════════════════════════
@@ -2441,8 +2443,12 @@ document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
 // Shows a subtitle toggle button in the top-right corner when in fullscreen.
 // Mirrors the state of the main CC controls so they stay in sync.
 
+function isMobileLandscape() {
+  return window.innerHeight <= 500 && window.innerWidth > window.innerHeight;
+}
+
 function updateFsSubBtn() {
-  const fs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  const fs = !!(document.fullscreenElement || document.webkitFullscreenElement) || isMobileLandscape();
   const btn = document.getElementById('fsSubBtn');
   if (!btn) return;
 
@@ -2551,6 +2557,9 @@ document.addEventListener('click', function(e) {
 // Hook into fullscreen events
 document.addEventListener('fullscreenchange', updateFsSubBtn);
 document.addEventListener('webkitfullscreenchange', updateFsSubBtn);
+// Also update when device rotates into/out of mobile landscape mode
+window.addEventListener('orientationchange', function() { setTimeout(updateFsSubBtn, 150); });
+window.addEventListener('resize', function() { setTimeout(updateFsSubBtn, 100); });
 
 
 // ── Chapter Markers ──────────────────────────────────────────
