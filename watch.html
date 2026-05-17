@@ -2783,9 +2783,34 @@ function initPlayer(film, videoUrl, episode) {
   const subs = (episode && Array.isArray(episode.subtitles) && episode.subtitles.length)
     ? episode.subtitles
     : (film.subtitles || []);
-  subs.forEach((sub, i) => {
-    player.addRemoteTextTrack({ kind:'subtitles', src:sub.url, srclang:sub.lang.toLowerCase().slice(0,2), label:sub.lang, default: false }, false);
-  });
+
+  // Wait for player ready before adding tracks — addRemoteTextTrack silently fails if called too early
+  const addTracks = () => {
+    // Remove any existing subtitle/caption tracks first (clean slate)
+    const existingTracks = player.remoteTextTracks();
+    for (let i = existingTracks.length - 1; i >= 0; i--) {
+      if (existingTracks[i].kind === 'subtitles' || existingTracks[i].kind === 'captions') {
+        player.removeRemoteTextTrack(existingTracks[i]);
+      }
+    }
+    subs.forEach((sub) => {
+      player.addRemoteTextTrack({
+        kind: 'subtitles',
+        src: sub.url,
+        srclang: sub.lang.toLowerCase().slice(0, 2),
+        label: sub.lang,
+        default: false
+      }, false);
+    });
+    console.log('[SUB] tracks added:', player.textTracks().length);
+  };
+
+  if (player.readyState() >= 1) {
+    addTracks();
+  } else {
+    player.one('loadedmetadata', addTracks);
+    player.one('ready', addTracks);
+  }
 
   // CC button — always visible
   const btnCC = document.getElementById('btnCC');
