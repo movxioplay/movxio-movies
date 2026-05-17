@@ -36,15 +36,16 @@
 .vjs-text-track-display { display: none !important; }
 
 /* ── Custom subtitle overlay ──
-   Always position:fixed. overflow:hidden on #playerContainer clips any
-   position:absolute child. JS positionSubOverlay() sets bottom live each
-   frame so subs sit just above the controls bar in normal AND fullscreen. */
+   position:absolute inside #playerContainer so it's part of the fullscreen
+   subtree on ALL browsers (desktop Chrome/Firefox/Safari + Android + iOS).
+   overflow:hidden removed from #playerContainer below — video is clipped
+   via its own wrapper instead. JS sets bottom each frame. */
 #subOverlay {
-  position: fixed;
+  position: absolute;
   bottom: 60px;
   left: 0; right: 0;
   text-align: center;
-  z-index: 2147483647;
+  z-index: 200;
   pointer-events: none;
   padding: 0 16px;
   display: none;
@@ -188,6 +189,7 @@ nav {
   background: #000;
   width: 100%;
   position: relative;
+  overflow: hidden; /* clips video — moved here from #playerContainer which needs overflow:visible for subOverlay */
 }
 
 /* Hide Video.js default UI completely */
@@ -217,7 +219,7 @@ nav {
   background-position: center center !important;
 }
 
-/* Fullscreen: make container fill entire screen and stop clipping the subtitle overlay */
+/* Fullscreen: make container fill entire screen */
 #playerContainer:fullscreen,
 #playerContainer:-webkit-full-screen,
 #playerContainer:-moz-full-screen,
@@ -226,7 +228,6 @@ nav {
   height: 100vh !important;
   aspect-ratio: unset !important;
   max-height: none !important;
-  overflow: visible !important;
 }
 
 /* ── PLAYER CONTAINER ── */
@@ -235,7 +236,7 @@ nav {
   width: 100%;
   aspect-ratio: 16/9;
   background: #000;
-  overflow: hidden;
+  overflow: visible; /* must NOT be hidden — clips subOverlay which is position:absolute inside */
   cursor: none;
   min-height: 0;
 }
@@ -1815,6 +1816,10 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
       </div>
     </div><!-- /customControls -->
 
+    <!-- Subtitle overlay — MUST be inside playerContainer to be part of the fullscreen subtree.
+         position:absolute with high z-index; JS sets bottom each frame. -->
+    <div id="subOverlay"><span></span></div>
+
   </div><!-- /playerContainer -->
 </div><!-- /player-section -->
 
@@ -2888,15 +2893,10 @@ function initPlayer(film, videoUrl, episode) {
     if (!overlay || !span) return;
 
     function positionSub() {
-      // Player rect in viewport coords
-      const rect = playerContainer.getBoundingClientRect();
       const controlsVisible = playerContainer.classList.contains('controls-visible');
-      // In fullscreen rect.bottom ≈ window.innerHeight
-      // Controls bar is ~78px tall (progress 22px + row 56px)
-      const ctrlH = controlsVisible ? 82 : 20;
-      // bottom = distance from bottom of viewport to desired subtitle top baseline
-      const bottomPx = (window.innerHeight - rect.bottom) + ctrlH;
-      overlay.style.bottom = Math.max(bottomPx, 16) + 'px';
+      // Controls bar: progress (~22px) + row (~56px) = ~78px. Add 8px breathing room.
+      // When controls hidden, sit 20px from bottom edge.
+      overlay.style.bottom = (controlsVisible ? 86 : 20) + 'px';
     }
 
     function renderSub() {
@@ -4152,9 +4152,6 @@ async function submitReport() {
 }
 
 </script>
-
-<!-- ══ SUBTITLE OVERLAY — body level, position:fixed, JS positions it live ══ -->
-<div id="subOverlay"><span></span></div>
 
 <!-- ══ PWA — Service Worker Cleanup ══ -->
 <script>
