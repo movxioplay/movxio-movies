@@ -33,7 +33,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.6.1/video-js.min.css" rel="stylesheet">
 <style>
 /* ── Subtitle / Caption rendering ── */
-.vjs-text-track-display { pointer-events: none !important; }
+.vjs-text-track-display { pointer-events: none !important; z-index: 10 !important; }
 .vjs-text-track-display div { font-family: 'DM Sans', sans-serif !important; }
 ::cue {
   background: rgba(0,0,0,0.75);
@@ -45,6 +45,26 @@
   text-shadow: 0 1px 3px rgba(0,0,0,0.9);
   border-radius: 3px;
   padding: 2px 6px;
+}
+/* ── Fullscreen subtitle fix ── */
+/* Android fullscreen: ensure vjs text track display stays on top */
+#playerContainer:fullscreen .vjs-text-track-display,
+#playerContainer:-webkit-full-screen .vjs-text-track-display,
+#playerContainer:-moz-full-screen .vjs-text-track-display {
+  z-index: 99 !important;
+  display: block !important;
+  visibility: visible !important;
+}
+/* iOS native fullscreen: use <track> element as fallback */
+video::-webkit-media-text-track-display {
+  font-family: 'DM Sans', sans-serif !important;
+  font-size: 1.1em !important;
+}
+video::cue {
+  background: rgba(0,0,0,0.75);
+  color: #ffffff;
+  font-size: 1.1em;
+  font-weight: 500;
 }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.6.1/video.min.js"></script>
@@ -2293,10 +2313,15 @@ function updateVolumeUI() {
 // ── Fullscreen ────────────────────────────────────────────────
 document.getElementById('btnFullscreen').addEventListener('click', toggleFullscreen);
 function toggleFullscreen() {
-  // iOS Safari: use video element native fullscreen
-  const vid = player ? player.el().querySelector('video') : null;
-  if (videojs.browser.IS_IOS && vid) {
-    if (vid.webkitEnterFullscreen) { vid.webkitEnterFullscreen(); return; }
+  // iOS Safari: use Video.js requestFullscreen so subtitle overlay stays intact
+  // vid.webkitEnterFullscreen() bypasses the VJS container and loses subtitle display
+  if (videojs.browser.IS_IOS && player) {
+    if (player.isFullscreen()) {
+      player.exitFullscreen();
+    } else {
+      player.requestFullscreen();
+    }
+    return;
   }
   if (!document.fullscreenElement && !document.webkitFullscreenElement) {
     const el = playerContainer;
