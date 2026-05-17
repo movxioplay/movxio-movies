@@ -2289,6 +2289,7 @@ function hideControls() {
 
 playerContainer.addEventListener('mousemove', showControls);
 playerContainer.addEventListener('touchstart', showControls, { passive: true });
+playerContainer.addEventListener('touchstart', function() { if (isMobileLandscape()) updateFsSubBtn(); }, { passive: true });
 
 // ── Click overlay: play/pause + double-tap skip ───────────────
 let lastTap = 0, lastTapSide = null;
@@ -2444,7 +2445,14 @@ document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
 // Mirrors the state of the main CC controls so they stay in sync.
 
 function isMobileLandscape() {
-  return window.innerHeight <= 500 && window.innerWidth > window.innerHeight;
+  // Match the same breakpoint used in the CSS media query
+  const landscape = window.innerWidth > window.innerHeight;
+  const shortScreen = window.innerHeight <= 500;
+  return landscape && shortScreen;
+}
+
+function isMobileDevice() {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || ('ontouchstart' in window);
 }
 
 function updateFsSubBtn() {
@@ -2460,8 +2468,11 @@ function updateFsSubBtn() {
     return;
   }
 
-  // Only show if there are actual subtitle tracks loaded
+  // Only show if there are actual subtitle tracks loaded.
+  // Use btnCC visibility as the source of truth — it's shown by initPlayer when subs exist.
   if (!player) { btn.style.display = 'none'; return; }
+  const btnCC = document.getElementById('btnCC');
+  const subsAvailable = btnCC && btnCC.style.display !== 'none' && btnCC.style.opacity !== '0.45';
   const tracks = player.textTracks();
   let subTracks = [];
   for (let i = 0; i < tracks.length; i++) {
@@ -2469,7 +2480,8 @@ function updateFsSubBtn() {
       subTracks.push(tracks[i]);
     }
   }
-  if (subTracks.length === 0) { btn.style.display = 'none'; return; }
+  // Show if tracks are loaded OR if btnCC is visible (subs were set up but tracks may not be ready yet)
+  if (subTracks.length === 0 && !subsAvailable) { btn.style.display = 'none'; return; }
 
   btn.style.display = 'block';
   buildFsSubList(subTracks);
@@ -3111,6 +3123,8 @@ function initPlayer(film, videoUrl, episode) {
   btnCC.style.display = '';
   btnCC.style.opacity = '';       // reset dim state from any previous episode
   btnCC.classList.remove('active');
+  // Re-evaluate floating subtitle button now that CC button visibility is set
+  if (typeof updateFsSubBtn === 'function') updateFsSubBtn();
   const ccList = document.getElementById('ccList');
   // FIX: Clear CC list before adding new items — prevents duplicate entries on episode switch
   ccList.innerHTML = '';
