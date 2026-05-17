@@ -2849,12 +2849,7 @@ function initPlayer(film, videoUrl, episode) {
       const targetLabel = item.dataset.lang || '';
       const tracks = player.textTracks();
 
-      // DEBUG — remove after confirming subtitles work
-      console.log('[SUB] clicked:', targetLabel, targetLang, 'isOff:', isOff);
-      console.log('[SUB] total tracks:', tracks.length);
-      for (let i = 0; i < tracks.length; i++) {
-        console.log('[SUB] track', i, '| label:', tracks[i].label, '| lang:', tracks[i].language, '| kind:', tracks[i].kind, '| mode:', tracks[i].mode);
-      }
+
 
       for (let i = 0; i < tracks.length; i++) {
         if (isOff) {
@@ -2863,7 +2858,6 @@ function initPlayer(film, videoUrl, episode) {
           const matchLang  = targetLang && tracks[i].language === targetLang;
           const matchLabel = targetLabel && tracks[i].label === targetLabel;
           tracks[i].mode = (matchLang || matchLabel) ? 'showing' : 'disabled';
-          console.log('[SUB] track', i, 'set to:', tracks[i].mode);
         }
       }
       document.getElementById('ccMenu').classList.remove('open');
@@ -3859,8 +3853,7 @@ async function init() {
             console.warn('[MOVXIO] Signing failed for episode, falling back to raw URL:', videoUrl);
           }
         }
-        console.log('[SUB-DEBUG] startEpisode.subtitles:', JSON.stringify(startEpisode.subtitles));
-        console.log('[SUB-DEBUG] episode hls_url:', startEpisode.hls_url);
+
         initPlayer(film, videoUrl, startEpisode);
         return; // skip movie init below
       }
