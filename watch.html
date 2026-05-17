@@ -31,6 +31,22 @@
 
 <!-- Video.js HLS engine (hidden, custom UI on top) -->
 <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.6.1/video-js.min.css" rel="stylesheet">
+<style>
+/* ── Subtitle / Caption rendering ── */
+.vjs-text-track-display { pointer-events: none !important; }
+.vjs-text-track-display div { font-family: 'DM Sans', sans-serif !important; }
+::cue {
+  background: rgba(0,0,0,0.75);
+  color: #ffffff;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1.1em;
+  font-weight: 500;
+  line-height: 1.5;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.6.1/video.min.js"></script>
 
 <style>
@@ -2734,7 +2750,7 @@ function initPlayer(film, videoUrl, episode) {
     autoplay: false,
     preload: 'metadata',
     responsive: true,
-    html5: { vhs: { overrideNative: !videojs.browser.IS_SAFARI, enableLowInitialPlaylist: true } },
+    html5: { vhs: { overrideNative: !videojs.browser.IS_SAFARI, enableLowInitialPlaylist: true }, nativeTextTracks: false },
   });
 
   // Set poster: prefer wide backdrop, fall back to thumbnail
@@ -2806,11 +2822,15 @@ function initPlayer(film, videoUrl, episode) {
       const isOff = item.dataset.lang === 'off';
       const targetLang = item.dataset.srclang || '';
       const tracks = player.textTracks();
+      const targetLabel = item.dataset.lang || '';
       for (let i = 0; i < tracks.length; i++) {
         if (isOff) {
           tracks[i].mode = 'disabled';
         } else {
-          tracks[i].mode = tracks[i].language === targetLang ? 'showing' : 'disabled';
+          // Match by language code OR label — belt-and-suspenders
+          const matchLang  = targetLang && tracks[i].language === targetLang;
+          const matchLabel = targetLabel && tracks[i].label === targetLabel;
+          tracks[i].mode = (matchLang || matchLabel) ? 'showing' : 'disabled';
         }
       }
       document.getElementById('ccMenu').classList.remove('open');
