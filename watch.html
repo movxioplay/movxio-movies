@@ -2821,16 +2821,24 @@ function initPlayer(film, videoUrl, episode) {
       item.classList.add('active');
       const isOff = item.dataset.lang === 'off';
       const targetLang = item.dataset.srclang || '';
-      const tracks = player.textTracks();
       const targetLabel = item.dataset.lang || '';
+      const tracks = player.textTracks();
+
+      // DEBUG — remove after confirming subtitles work
+      console.log('[SUB] clicked:', targetLabel, targetLang, 'isOff:', isOff);
+      console.log('[SUB] total tracks:', tracks.length);
+      for (let i = 0; i < tracks.length; i++) {
+        console.log('[SUB] track', i, '| label:', tracks[i].label, '| lang:', tracks[i].language, '| kind:', tracks[i].kind, '| mode:', tracks[i].mode);
+      }
+
       for (let i = 0; i < tracks.length; i++) {
         if (isOff) {
           tracks[i].mode = 'disabled';
         } else {
-          // Match by language code OR label — belt-and-suspenders
           const matchLang  = targetLang && tracks[i].language === targetLang;
           const matchLabel = targetLabel && tracks[i].label === targetLabel;
           tracks[i].mode = (matchLang || matchLabel) ? 'showing' : 'disabled';
+          console.log('[SUB] track', i, 'set to:', tracks[i].mode);
         }
       }
       document.getElementById('ccMenu').classList.remove('open');
