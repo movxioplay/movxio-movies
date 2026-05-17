@@ -3834,6 +3834,8 @@ async function init() {
             console.warn('[MOVXIO] Signing failed for episode, falling back to raw URL:', videoUrl);
           }
         }
+        console.log('[SUB-DEBUG] startEpisode.subtitles:', JSON.stringify(startEpisode.subtitles));
+        console.log('[SUB-DEBUG] episode hls_url:', startEpisode.hls_url);
         initPlayer(film, videoUrl, startEpisode);
         return; // skip movie init below
       }
