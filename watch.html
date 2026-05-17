@@ -1212,8 +1212,6 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
   .player-section { height: 100svh; }
   #playerContainer { aspect-ratio: unset; height: 100svh; width: 100vw; }
   .content-outer, .ad-slot, footer, .more-section { display: none; }
-  /* Show subtitle button in mobile landscape fullscreen mode */
-  #fsSubBtn { display: block !important; }
 }
 
 /* ══════════════════════════════════════
@@ -2289,7 +2287,6 @@ function hideControls() {
 
 playerContainer.addEventListener('mousemove', showControls);
 playerContainer.addEventListener('touchstart', showControls, { passive: true });
-playerContainer.addEventListener('touchstart', function() { if (isMobileLandscape()) updateFsSubBtn(); }, { passive: true });
 
 // ── Click overlay: play/pause + double-tap skip ───────────────
 let lastTap = 0, lastTapSide = null;
@@ -2444,19 +2441,8 @@ document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
 // Shows a subtitle toggle button in the top-right corner when in fullscreen.
 // Mirrors the state of the main CC controls so they stay in sync.
 
-function isMobileLandscape() {
-  // Match the same breakpoint used in the CSS media query
-  const landscape = window.innerWidth > window.innerHeight;
-  const shortScreen = window.innerHeight <= 500;
-  return landscape && shortScreen;
-}
-
-function isMobileDevice() {
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || ('ontouchstart' in window);
-}
-
 function updateFsSubBtn() {
-  const fs = !!(document.fullscreenElement || document.webkitFullscreenElement) || isMobileLandscape();
+  const fs = !!(document.fullscreenElement || document.webkitFullscreenElement);
   const btn = document.getElementById('fsSubBtn');
   if (!btn) return;
 
@@ -2468,11 +2454,8 @@ function updateFsSubBtn() {
     return;
   }
 
-  // Only show if there are actual subtitle tracks loaded.
-  // Use btnCC visibility as the source of truth — it's shown by initPlayer when subs exist.
+  // Only show if there are actual subtitle tracks loaded
   if (!player) { btn.style.display = 'none'; return; }
-  const btnCC = document.getElementById('btnCC');
-  const subsAvailable = btnCC && btnCC.style.display !== 'none' && btnCC.style.opacity !== '0.45';
   const tracks = player.textTracks();
   let subTracks = [];
   for (let i = 0; i < tracks.length; i++) {
@@ -2480,8 +2463,7 @@ function updateFsSubBtn() {
       subTracks.push(tracks[i]);
     }
   }
-  // Show if tracks are loaded OR if btnCC is visible (subs were set up but tracks may not be ready yet)
-  if (subTracks.length === 0 && !subsAvailable) { btn.style.display = 'none'; return; }
+  if (subTracks.length === 0) { btn.style.display = 'none'; return; }
 
   btn.style.display = 'block';
   buildFsSubList(subTracks);
@@ -2569,9 +2551,6 @@ document.addEventListener('click', function(e) {
 // Hook into fullscreen events
 document.addEventListener('fullscreenchange', updateFsSubBtn);
 document.addEventListener('webkitfullscreenchange', updateFsSubBtn);
-// Also update when device rotates into/out of mobile landscape mode
-window.addEventListener('orientationchange', function() { setTimeout(updateFsSubBtn, 150); });
-window.addEventListener('resize', function() { setTimeout(updateFsSubBtn, 100); });
 
 
 // ── Chapter Markers ──────────────────────────────────────────
@@ -3044,6 +3023,28 @@ function initPlayer(film, videoUrl, episode) {
     ? episode.subtitles
     : (film.subtitles || []);
 
+  // ── Native <track> injection for iOS Safari native fullscreen ──
+  // iOS Safari's built-in fullscreen player only reads native <track> elements
+  // on the <video> tag — it ignores Video.js remote tracks. We inject them here
+  // so the CC button appears in the iOS native player UI automatically.
+  function injectNativeTracks(videoEl, subsArr) {
+    // Remove any previously injected native tracks (class flag)
+    videoEl.querySelectorAll('track.mvx-native').forEach(t => t.remove());
+    subsArr.forEach(function(sub) {
+      const track = document.createElement('track');
+      track.kind    = 'subtitles';
+      track.src     = sub.url;
+      track.srclang = sub.lang.toLowerCase().slice(0, 2);
+      track.label   = sub.lang;
+      track.className = 'mvx-native';
+      // Do NOT set default=true — we manage state manually
+      videoEl.appendChild(track);
+      // Keep mode=hidden so iOS shows them via its own CC picker,
+      // but our custom renderer also reads them
+      track.track.mode = 'hidden';
+    });
+  }
+
   // Wait for player ready before adding tracks
   const addTracks = () => {
     // Remove existing subtitle/caption tracks (clean slate)
@@ -3062,6 +3063,9 @@ function initPlayer(film, videoUrl, episode) {
         default: false
       }, false);
     });
+    // Inject native <track> elements so iOS Safari native fullscreen shows CC button
+    const videoEl = player.el ? player.el().querySelector('video') : null;
+    if (videoEl && subs.length > 0) injectNativeTracks(videoEl, subs);
     // Start our custom subtitle renderer
     startSubtitleRenderer();
     // Update the fullscreen CC button now that tracks are loaded
@@ -3074,6 +3078,39 @@ function initPlayer(film, videoUrl, episode) {
     player.one('loadedmetadata', addTracks);
     player.one('ready', addTracks);
   }
+
+  // ── iOS native fullscreen events ─────────────────────────────
+  // When iOS Safari takes over fullscreen (webkitEnterFullscreen path),
+  // listen for the user selecting a subtitle via the iOS CC picker and
+  // sync it back to our Video.js tracks so the custom renderer works.
+  (function attachiOSFullscreenListeners() {
+    const vid = player.el ? player.el().querySelector('video') : null;
+    if (!vid) return;
+
+    vid.addEventListener('webkitbeginfullscreen', function() {
+      // iOS native FS started — start polling native track modes
+      // so if user picks a language our custom renderer picks it up too
+      vid._iosFsInterval = setInterval(function() {
+        const nativeTracks = vid.querySelectorAll('track.mvx-native');
+        nativeTracks.forEach(function(nt) {
+          // If iOS turned a native track to 'showing', mirror to VJS track
+          if (nt.track.mode === 'showing') {
+            const vjsTracks = player.textTracks();
+            for (let i = 0; i < vjsTracks.length; i++) {
+              const vt = vjsTracks[i];
+              if (vt.kind === 'subtitles' || vt.kind === 'captions') {
+                vt.mode = (vt.label === nt.label || vt.language === nt.srclang) ? 'showing' : 'disabled';
+              }
+            }
+          }
+        });
+      }, 500);
+    });
+
+    vid.addEventListener('webkitendfullscreen', function() {
+      if (vid._iosFsInterval) { clearInterval(vid._iosFsInterval); vid._iosFsInterval = null; }
+    });
+  })();
 
   // ── Custom Subtitle Renderer ─────────────────────────────────
   // Reads active VJS text track cues and renders to #subOverlay
@@ -3123,8 +3160,6 @@ function initPlayer(film, videoUrl, episode) {
   btnCC.style.display = '';
   btnCC.style.opacity = '';       // reset dim state from any previous episode
   btnCC.classList.remove('active');
-  // Re-evaluate floating subtitle button now that CC button visibility is set
-  if (typeof updateFsSubBtn === 'function') updateFsSubBtn();
   const ccList = document.getElementById('ccList');
   // FIX: Clear CC list before adding new items — prevents duplicate entries on episode switch
   ccList.innerHTML = '';
