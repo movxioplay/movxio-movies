@@ -35,13 +35,13 @@
 /* ── Hide VJS built-in subtitle display — we use our own overlay ── */
 .vjs-text-track-display { display: none !important; }
 
-/* ── Custom subtitle overlay — works in ALL fullscreen modes ── */
+/* ── Custom subtitle overlay — fixed at body level so it survives iOS/Android fullscreen ── */
 #subOverlay {
-  position: absolute;
-  bottom: 70px;
+  position: fixed;
+  bottom: 80px;
   left: 0; right: 0;
   text-align: center;
-  z-index: 99;
+  z-index: 2147483647; /* max z-index — float above everything including fullscreen */
   pointer-events: none;
   padding: 0 16px;
   display: none;
@@ -60,8 +60,8 @@
   max-width: 90%;
   white-space: pre-line;
 }
-/* Move up when controls hidden */
-#playerContainer:not(.controls-visible) #subOverlay { bottom: 24px; }
+/* Subtitle sits higher when controls are visible (controls bar ~56px + progress ~22px) */
+body.subs-controls-visible #subOverlay { bottom: 100px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.6.1/video.min.js"></script>
 
@@ -214,6 +214,17 @@ nav {
 .video-js .vjs-poster {
   background-size: cover !important;
   background-position: center center !important;
+}
+
+/* Fullscreen: make container fill entire screen */
+#playerContainer:fullscreen,
+#playerContainer:-webkit-full-screen,
+#playerContainer:-moz-full-screen,
+#playerContainer:-ms-fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  aspect-ratio: unset !important;
+  max-height: none !important;
 }
 
 /* ── PLAYER CONTAINER ── */
@@ -1600,9 +1611,6 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
     <!-- Fix 4: blurred poster fallback layer (shown when no backdrop) -->
     <div id="playerBgBlur"></div>
 
-    <!-- Custom subtitle overlay — works on iOS/Android fullscreen -->
-    <div id="subOverlay"><span></span></div>
-
     <!-- Fix 3: persistent initial play button (shown before first play) -->
     <div id="initialPlayBtn" style="position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity 0.3s;">
       <div id="initialPlayIcon" style="width:80px;height:80px;border-radius:50%;background:rgba(232,71,63,0.92);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 12px rgba(232,71,63,0.15),0 8px 40px rgba(232,71,63,0.5);transition:transform 0.18s cubic-bezier(0.34,1.56,0.64,1),box-shadow 0.18s;">
@@ -2179,6 +2187,7 @@ const playerContainer = document.getElementById('playerContainer');
 
 function showControls() {
   playerContainer.classList.add('controls-visible');
+  document.body.classList.add('subs-controls-visible');
   clearTimeout(controlsTimer);
   if (player && !player.paused()) {
     controlsTimer = setTimeout(hideControls, 3000);
@@ -2188,6 +2197,7 @@ function showControls() {
 function hideControls() {
   if (isDragging) return;
   playerContainer.classList.remove('controls-visible');
+  document.body.classList.remove('subs-controls-visible');
 }
 
 playerContainer.addEventListener('mousemove', showControls);
@@ -2312,16 +2322,17 @@ function updateVolumeUI() {
 // ── Fullscreen ────────────────────────────────────────────────
 document.getElementById('btnFullscreen').addEventListener('click', toggleFullscreen);
 function toggleFullscreen() {
-  // iOS Safari: use video element native fullscreen
-  const vid = player ? player.el().querySelector('video') : null;
-  if (videojs.browser.IS_IOS && vid) {
-    if (vid.webkitEnterFullscreen) { vid.webkitEnterFullscreen(); return; }
-  }
+  // Always request fullscreen on the container div (not the raw video element).
+  // This keeps #subOverlay and all custom UI visible on Android and modern iOS (16.4+).
+  // For older iOS that only supports webkitEnterFullscreen on the video element, the
+  // #subOverlay is now position:fixed at body level so it still floats on top.
   if (!document.fullscreenElement && !document.webkitFullscreenElement) {
     const el = playerContainer;
-    (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen).call(el);
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (req) req.call(el);
   } else {
-    (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen).call(document);
+    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    if (exit) exit.call(document);
   }
 }
 function updateFullscreenUI() {
@@ -2331,7 +2342,6 @@ function updateFullscreenUI() {
 }
 document.addEventListener('fullscreenchange', updateFullscreenUI);
 document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
-
 
 // ── Chapter Markers ──────────────────────────────────────────
 // chapters format: [{time: 0, title: 'Intro'}, {time: 120, title: 'Act 1'}, ...]
@@ -4089,6 +4099,9 @@ async function submitReport() {
 }
 
 </script>
+
+<!-- ══ SUBTITLE OVERLAY — lives at body level so it survives iOS/Android fullscreen ══ -->
+<div id="subOverlay"><span></span></div>
 
 <!-- ══ PWA — Service Worker Cleanup ══ -->
 <script>
