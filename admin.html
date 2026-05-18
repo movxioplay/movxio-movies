@@ -1426,15 +1426,18 @@ function showPage(p) {
 }
 
 // ── SUPABASE API ───────────────────────────────────────────────
-async function supaFetch(path, method = 'GET', body = null) {
+async function supaFetch(path, method = 'GET', body = null, mode = null) {
   const token = SESSION_TOKEN || SUPABASE_KEY;
+  const prefer = mode === 'upsert'
+    ? 'resolution=merge-duplicates,return=representation'
+    : 'return=representation';
   const opts = {
     method,
     headers: {
       'apikey': SUPABASE_KEY,
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
-      'Prefer': 'return=representation',
+      'Prefer': prefer,
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache'
     },
@@ -2351,7 +2354,7 @@ async function loadEpisodesForSeries(seriesId) {
 async function saveEpisodes(seriesId) {
   const errors = [];
 
-  // fix #4 — delete episodes removed in the UI
+  // delete episodes removed in the UI
   for (const dbId of deletedEpisodeIds) {
     try { await supaFetch('episodes?id=eq.' + dbId, 'DELETE'); }
     catch(e) { console.error('Delete ep error:', e); }
@@ -2368,14 +2371,19 @@ async function saveEpisodes(seriesId) {
     };
     const clean = Object.fromEntries(Object.entries(data).filter(function([,v]){return v!=null && v!=='';}));
     try {
-      if (ep.id) await supaFetch('episodes?id=eq.' + ep.id, 'PATCH', clean);
-      else await supaFetch('episodes', 'POST', clean);
+      if (ep.id) {
+        // Known DB record — patch by id
+        await supaFetch('episodes?id=eq.' + ep.id, 'PATCH', clean);
+      } else {
+        // No id — upsert on unique constraint to prevent duplicates
+        await supaFetch('episodes?on_conflict=series_id,season,episode', 'POST', clean, 'upsert');
+      }
     } catch(e) {
       console.error('Save ep error:', e);
       errors.push('S' + ep.season + 'E' + ep.episode + ': ' + e.message);
     }
   }
-  return errors; // caller decides whether to surface these
+  return errors;
 }
 
 function toast(msg, err = false) {
