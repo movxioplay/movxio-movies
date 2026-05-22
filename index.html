@@ -1600,6 +1600,8 @@ footer {
 }
 .reco-because strong { color: var(--accent); }
 </style>
+<!-- ══ ADSTERRA POPUNDER ══ -->
+<script src="https://pl29519727.effectivecpmnetwork.com/c1/6f/25/c16f25aebc35d4d1e76a8986f80e85e8.js"></script>
 </head>
 <body>
 
@@ -2872,9 +2874,9 @@ init();
 </nav>
 <style>
 @media (min-width: 768px) { .bottom-nav-bar { display: none !important; } }
-/* On mobile: pad for bottom nav (64px) + Adsterra social bar (~56px) + iOS safe area */
+/* On mobile: pad for bottom nav (64px) + iOS safe area */
 @media (max-width: 767px) {
-  body { padding-bottom: 120px; padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px)); }
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
 }
 </style>
 
@@ -2924,44 +2926,42 @@ document.addEventListener('keydown', e => {
 });
 </script>
 
-<!-- ══ MONETAG POPUNDER — First click on index ══ -->
+<!-- ══ AD — Film card click gate (2 ads per film URL, then navigate) ══ -->
 <script>
-(function() {
-  const DAY_KEY   = 'mvx_ad_day';
-  const COUNT_KEY = 'mvx_ad_count';
-  const today     = new Date().toDateString();
+(function(){
+  const AD_URL = 'https://www.effectivecpmnetwork.com/r8v95eve?key=f1e327ce44e48d419905756d9a1b7d35';
+  const AD_KEY = 'reelix_card_clicks';
 
-  function resetIfNeeded() {
-    const lastDay = localStorage.getItem(DAY_KEY);
-    if (lastDay !== today) {
-      localStorage.setItem(DAY_KEY, today);
-      localStorage.setItem(COUNT_KEY, '0');
+  function getCardClicks(href){
+    try{ return JSON.parse(sessionStorage.getItem(AD_KEY)||'{}')[href]||0; }catch{ return 0; }
+  }
+  function setCardClicks(href, n){
+    try{ const d=JSON.parse(sessionStorage.getItem(AD_KEY)||'{}'); d[href]=n; sessionStorage.setItem(AD_KEY,JSON.stringify(d)); }catch{}
+  }
+
+  document.addEventListener('click', function(e){
+    // Skip watchlist button clicks
+    if(e.target.closest('.card-wl-btn')) return;
+
+    const card = e.target.closest('.film-card');
+    if(!card) return;
+
+    // Resolve destination href from inline onclick or data attributes
+    const onclk = card.getAttribute('onclick')||'';
+    const hrefMatch = onclk.match(/href='([^']+)'/);
+    const href = hrefMatch ? hrefMatch[1] : (card.dataset.slug ? `/film/${card.dataset.slug}` : `watch.html?id=${card.dataset.id}`);
+    if(!href) return;
+
+    const clicks = getCardClicks(href);
+    if(clicks < 2){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setCardClicks(href, clicks + 1);
+      var _adWin = window.open(AD_URL, '_blank');
+      if(_adWin) _adWin.focus();
     }
-  }
-
-  function getCount()  { return parseInt(localStorage.getItem(COUNT_KEY) || '0'); }
-  function bumpCount() { localStorage.setItem(COUNT_KEY, String(getCount() + 1)); }
-
-  function firePopunder() {
-    resetIfNeeded();
-    if (getCount() >= 2) return; // max 2 popunders per day across both pages
-    bumpCount();
-    (function(s) {
-      s.dataset.zone = '10865583';
-      s.src = 'https://al5sm.com/tag.min.js';
-    })([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')));
-  }
-
-  // Fire on first meaningful click only
-  // Small delay so popunder opens behind the navigation, not in front of it
-  document.addEventListener('click', function handler(e) {
-    if (e.target.closest('.card-wl-btn')) return; // don't fire on bookmark clicks
-    const target = e.target.closest('a[href*="watch"], .film-card, .btn-watch, .card-play, .card-overlay');
-    if (!target) return;
-    document.removeEventListener('click', handler);
-    setTimeout(firePopunder, 50);
-  });
-
+    // 3rd click → card's own onclick fires normally
+  }, true);
 })();
 </script>
 
