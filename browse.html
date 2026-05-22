@@ -487,6 +487,8 @@ footer { border-top: 1px solid var(--border); padding: 40px 20px 28px; }
   .filter-country { display: none; }
 }
 </style>
+<!-- ══ ADSTERRA POPUNDER ══ -->
+<script src="https://pl29519727.effectivecpmnetwork.com/c1/6f/25/c16f25aebc35d4d1e76a8986f80e85e8.js"></script>
 </head>
 <body>
 
@@ -1359,20 +1361,42 @@ async function init() {
 init();
 </script>
 
-<!-- ══ MONETAG POPUNDER — fires on every film card click ══ -->
+
+<!-- ══ AD — Film card click gate (2 ads per film URL, then navigate) ══ -->
 <script>
-(function() {
-  function firePopunder() {
-    (function(s) {
-      s.dataset.zone = '10865583';
-      s.src = 'https://al5sm.com/tag.min.js';
-    })([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')));
+(function(){
+  const AD_URL = 'https://www.effectivecpmnetwork.com/r8v95eve?key=f1e327ce44e48d419905756d9a1b7d35';
+  const AD_KEY = 'reelix_card_clicks';
+
+  function getCardClicks(href){
+    try{ return JSON.parse(sessionStorage.getItem(AD_KEY)||'{}')[href]||0; }catch{ return 0; }
   }
-  document.addEventListener('click', function(e) {
-    if (e.target.closest('.film-card, .card-play, .card-overlay')) {
-      setTimeout(firePopunder, 50);
+  function setCardClicks(href, n){
+    try{ const d=JSON.parse(sessionStorage.getItem(AD_KEY)||'{}'); d[href]=n; sessionStorage.setItem(AD_KEY,JSON.stringify(d)); }catch{}
+  }
+
+  // Intercept film card clicks BEFORE the existing delegated handler
+  document.addEventListener('click', function(e){
+    if(e.target.closest('.card-wl-btn, .card-actor-tag')) return;
+
+    const card = e.target.closest('.film-card');
+    if(!card) return;
+
+    const id   = card.dataset.id;
+    const slug = card.dataset.slug;
+    const href = slug ? `/film/${slug}` : `watch.html?id=${id}`;
+    if(!href) return;
+
+    const clicks = getCardClicks(href);
+    if(clicks < 2){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setCardClicks(href, clicks + 1);
+      var _adWin = window.open(AD_URL, '_blank');
+      if(_adWin) _adWin.focus();
     }
-  });
+    // 3rd click → existing handler (trackAndGo) fires normally
+  }, true);
 })();
 </script>
 
