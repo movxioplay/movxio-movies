@@ -1555,11 +1555,13 @@ body.theater-mode .master-layout { padding-top: calc(56.25vw); }
 .nav-btn.saved { color: var(--gold) !important; border-color: rgba(232,184,75,0.4) !important; background: rgba(232,184,75,0.08) !important; }
 #filmDesc.expanded { -webkit-line-clamp: unset !important; display: block !important; }
 @media (min-width: 768px) { .mv-bottom-nav { display: none !important; } }
-/* On mobile: pad for bottom nav (64px) + Adsterra social bar (~56px) */
+/* On mobile: pad for bottom nav (64px) */
 body { padding-bottom: 120px; }
 @media (min-width: 768px) { body { padding-bottom: 0; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/8.6.1/video.min.js"></script>
+<!-- ══ ADSTERRA POPUNDER ══ -->
+<script src="https://pl29519727.effectivecpmnetwork.com/c1/6f/25/c16f25aebc35d4d1e76a8986f80e85e8.js"></script>
 </head>
 <body>
 
@@ -1922,8 +1924,8 @@ body { padding-bottom: 120px; }
           <span class="skel skel-poster" id="filmPosterSkel"></span>
           <div class="film-poster-ph" id="filmPosterPh" style="display:none;">🎬</div>
         </div>
-        <!-- Trailer button: fires popunder only, no navigation -->
-        <button class="trailer-btn" onclick="fireTrailerPopunder()">▶ Trailer</button>
+        <!-- Trailer button -->
+        <button class="trailer-btn">▶ Trailer</button>
       </div>
 
       <!-- DETAILS (right column) -->
@@ -2109,10 +2111,6 @@ body { padding-bottom: 120px; }
 <!-- ══ PWA — Service Worker Cleanup ══ -->
 
 <!-- ══ DISABLE RIGHT-CLICK & DRAG ON PLAYER ══ -->
-
-<!-- ══ ADSTERRA SOCIAL BAR — deferred so it doesn't block render, loaded once only ══ -->
-
-<!-- ══ MONETAG POPUNDER — fires on actual playback start, not on click ══ -->
 
 <script>
 const CONFIG = {
@@ -3340,8 +3338,7 @@ function initPlayer(film, videoUrl, episode) {
 
   player.one('play', () => incrementViews(film.id));
 
-  // Re-attach popunder listener to this new player instance
-  if (window._attachPopunderToPlayer) window._attachPopunderToPlayer();
+
 }
 
 
@@ -3643,16 +3640,6 @@ function renderRelated(films, currentId, currentGenres, currentFilm) {
       </div>`;
     }).join('');
   }
-}
-
-// ── Trailer button — fires popunder only, no navigation ──────
-function fireTrailerPopunder() {
-  try {
-    var s = document.createElement('script');
-    s.dataset.zone = '10865583';
-    s.src = 'https://al5sm.com/tag.min.js';
-    document.body.appendChild(s);
-  } catch(e) {}
 }
 
 function copyLink() {
@@ -4327,79 +4314,96 @@ async function submitReport() {
     player.style.msUserSelect = 'none';
   });
 })();
+</script>
 
-(function() {
-  var _adsterraLoaded = false;
-  function loadAdsterra() {
-    if (_adsterraLoaded) return;
-    _adsterraLoaded = true;
-    var s = document.createElement('script');
-    s.src = 'https://pl29131148.profitablecpmratenetwork.com/44/a4/be/44a4be48a597891bd035368d00eb6745.js';
-    s.async = true;
-    document.body.appendChild(s);
+<!-- ══ AD LOGIC — Player gate + 20-min timer + Exit intent + Sidebar cards ══ -->
+<script>
+(function(){
+  const AD_URL = 'https://www.effectivecpmnetwork.com/r8v95eve?key=f1e327ce44e48d419905756d9a1b7d35';
+  const AD_KEY = 'reelix_card_clicks';
+
+  // ── Shared sessionStorage helpers (also used by sidebar cards) ──
+  function getCardClicks(href){
+    try{ return JSON.parse(sessionStorage.getItem(AD_KEY)||'{}')[href]||0; }catch{ return 0; }
   }
-  if (document.readyState === 'complete') { loadAdsterra(); }
-  else { window.addEventListener('load', loadAdsterra); }
-})();
+  function setCardClicks(href, n){
+    try{ const d=JSON.parse(sessionStorage.getItem(AD_KEY)||'{}'); d[href]=n; sessionStorage.setItem(AD_KEY,JSON.stringify(d)); }catch{}
+  }
 
-(function() {
-  const DAY_KEY   = 'mvx_ad_day';
-  const COUNT_KEY = 'mvx_ad_count';
-  const today     = new Date().toDateString();
+  function openAd(){
+    var _adWin = window.open(AD_URL, '_blank');
+    if(_adWin) _adWin.focus();
+  }
 
-  function resetIfNeeded() {
-    if (localStorage.getItem(DAY_KEY) !== today) {
-      localStorage.setItem(DAY_KEY, today);
-      localStorage.setItem(COUNT_KEY, '0');
+  // ── 1. Player area click gate (2 clicks → ad, 3rd → plays) ──
+  var playerAdClicks = 0;
+  var playerContainer = document.getElementById('playerContainer');
+  if(playerContainer){
+    playerContainer.addEventListener('click', function(e){
+      if(e.target.closest('.ctrl-btn,.scrubber-wrap,.vol-block,.ctrl-back,.ctrl-dropdown,.shortcuts-overlay')) return;
+      if(playerAdClicks < 2){
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        playerAdClicks++;
+        openAd();
+      }
+    }, true); // capture phase — fires before existing play/pause handlers
+  }
+
+  // ── 2. Poster/pre-play button (shares playerAdClicks counter) ──
+  var necPlayBtn = document.getElementById('necPlayBtn');
+  if(necPlayBtn){
+    necPlayBtn.addEventListener('click', function(e){
+      if(playerAdClicks < 2){
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        playerAdClicks++;
+        openAd();
+      }
+    }, true);
+  }
+
+  // ── 3. 20-minute timer ──
+  setTimeout(function(){
+    // Find the active video element inside the Video.js player
+    var vid = document.querySelector('#playerContainer video');
+    if(vid && !vid.paused){
+      openAd();
+    } else if(vid){
+      vid.addEventListener('play', function _onPlay(){
+        vid.removeEventListener('play', _onPlay);
+        openAd();
+      });
     }
-  }
-  function getCount()  { return parseInt(localStorage.getItem(COUNT_KEY) || '0'); }
-  function bumpCount() { localStorage.setItem(COUNT_KEY, String(getCount() + 1)); }
+  }, 20 * 60 * 1000);
 
-  function firePopunder() {
-    resetIfNeeded();
-    if (getCount() >= 2) return;
-    bumpCount();
-    var s = document.createElement('script');
-    s.dataset.zone = '10865583';
-    s.src = 'https://al5sm.com/tag.min.js';
-    document.body.appendChild(s);
-  }
-
-  var popFiredThisSession = false;
-
-  // Exposed so initPlayer() can re-attach after each player re-init (episodes, film switches)
-  window._attachPopunderToPlayer = function() {
-    if (!window.player || !window.player.one) return;
-    window.player.one('play', function() {
-      if (popFiredThisSession) return;
-      popFiredThisSession = true;
-      firePopunder();
-    });
-  };
-
-  // Initial attach — poll until player exists on first load
-  function pollAndAttach() {
-    if (window.player && window.player.one) {
-      window._attachPopunderToPlayer();
-    } else {
-      setTimeout(pollAndAttach, 500);
+  // ── 4. Exit intent (mouse leaves through top of page) ──
+  var _exitFired = false;
+  document.addEventListener('mouseleave', function(e){
+    if(_exitFired) return;
+    if(e.clientY <= 0){
+      _exitFired = true;
+      openAd();
     }
-  }
-  document.addEventListener('DOMContentLoaded', pollAndAttach);
+  });
 
-  // Fire again at 30-minute mark during active playback
-  var thirtyFired = false;
-  setInterval(function() {
-    if (thirtyFired) return;
-    if (!window.player || window.player.paused()) return;
-    if ((window.player.currentTime ? window.player.currentTime() : 0) >= 1800) {
-      thirtyFired = true;
-      firePopunder();
+  // ── 5. Sidebar "related" card click gate ──
+  document.addEventListener('click', function(e){
+    const card = e.target.closest('a.related-card');
+    if(!card) return;
+    const href = card.getAttribute('href');
+    if(!href) return;
+    const clicks = getCardClicks(href);
+    if(clicks < 2){
+      e.preventDefault();
+      setCardClicks(href, clicks + 1);
+      openAd();
     }
-  }, 15000);
+    // 3rd click → normal navigation
+  });
 
 })();
 </script>
+
 </body>
 </html>
